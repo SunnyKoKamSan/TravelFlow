@@ -1,27 +1,20 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTrip } from './hooks/useTrip';
-import { useDebounce } from './hooks/useDebounce';
+// useDebounce and wizard-related helpers moved into Wizard component
 import Globe from './components/Globe';
 import Header from './components/Header';
 import NavBar from './components/NavBar';
 import FAB from './components/FAB';
 import MapPanel from './components/MapPanel';
-import { 
-  searchLocation, 
-  getCoordinates, 
-  fetchWeather, 
-  getWeatherIcon, 
-  getCountryInfo, 
-  fetchExchangeRate, 
-  translateText, 
-  generateAIItinerary, 
-  askAI 
-} from './lib/api';
+import { getCoordinates, fetchWeather, fetchExchangeRate, translateText, askAI } from './lib/api';
 import { formatDate } from './lib/utils';
-import { ItineraryItem, GeocodeResult, TripSettings } from './types';
+import { ItineraryItem, TripSettings } from './types';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import LoginView from './components/LoginView';
+import Wizard from './components/Wizard';
+import ItineraryView from './components/ItineraryView';
+import WalletView from './components/WalletView';
 
 const defaultSettings: TripSettings = {
   isSetup: false,
@@ -78,18 +71,6 @@ function App() {
   const [showGlobeModal, setShowGlobeModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
-  // Wizard
-  const [wizard, setWizard] = useState({
-    step: 1,
-    destination: '',
-    date: '',
-    loading: false,
-    currencyCode: '',
-    tempData: null as GeocodeResult | null,
-    isSearching: false,
-    suggestions: [] as GeocodeResult[],
-  });
-  
   // Forms
   const [formItinerary, setFormItinerary] = useState({ id: null as number | null, time: '', location: '', note: '' });
   const [formExpense, setFormExpense] = useState({ amount: '', title: '', payer: 'Me' });
@@ -111,7 +92,7 @@ function App() {
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const modalMarkerRef = useRef<L.Marker | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // wizard-specific refs moved into Wizard component
 
   const tabs = [
     { id: 'itinerary' as const, label: 'Plan', icon: 'ph-calendar-blank', iconFill: 'ph-calendar-check-fill' },
@@ -169,236 +150,7 @@ function App() {
     }
   }, [settings.currencyCode]);
 
-  // Wizard destination input with debounce
-  const debouncedDestination = useDebounce(wizard.destination, 300);
-
-  useEffect(() => {
-    if (debouncedDestination.length < 2) {
-      setWizard(prev => ({ ...prev, suggestions: [] }));
-      return;
-    }
-
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    
-    setWizard(prev => ({ ...prev, isSearching: true }));
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const results = await searchLocation(debouncedDestination);
-        setWizard(prev => ({ ...prev, suggestions: results, isSearching: false }));
-      } catch (e) {
-        console.error(e);
-        setWizard(prev => ({ ...prev, isSearching: false }));
-      }
-    }, 300);
-  }, [debouncedDestination]);
-
-  // Wizard functions
-  const onDestinationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setWizard(prev => ({ ...prev, destination: e.target.value, tempData: null }));
-  };
-
-  const selectSuggestion = (item: GeocodeResult) => {
-    setWizard(prev => ({
-      ...prev,
-      destination: item.name,
-      suggestions: [],
-      tempData: {
-        name: item.name,
-        latitude: item.latitude,
-        longitude: item.longitude,
-        country_code: item.country_code,
-        country: item.country,
-        admin1: item.admin1,
-      },
-    }));
-  };
-
-  const detectDetails = async () => {
-    if (!wizard.tempData) {
-      if (wizard.suggestions.length > 0) {
-        selectSuggestion(wizard.suggestions[0]);
-        return;
-      } else {
-        alert('Please select a valid destination from the list.');
-        return;
-      }
-    }
-
-    if (!wizard.destination || !wizard.date) {
-      alert('Please fill in all fields');
-      return;
-    }
-
-    setWizard(prev => ({ ...prev, loading: true }));
-    let temp = { ...wizard.tempData, currencySymbol: '$', langName: 'English' };
-    let currCode = 'USD';
-
-    try {
-      if (temp.country_code) {
-        try {
-          const countryInfo = await getCountryInfo(temp.country_code);
-          if (countryInfo) {
-            currCode = countryInfo.currencyCode;
-            temp = { ...temp, currencySymbol: countryInfo.currencySymbol, langName: countryInfo.langName };
-          }
-        } catch (err) {
-          console.log('Country API failed, using defaults');
-        }
-      }
-    } catch (e) {
-      console.log('Location API failed, using defaults');
-    }
-
-    setWizard(prev => ({
-      ...prev,
-      currencyCode: currCode,
-      tempData: temp,
-      loading: false,
-      step: 2,
-    }));
-  };
-
-  const handleGenerateAIItinerary = async () => {
-    if (!wizard.destination) {
-      alert('Please enter a destination first.');
-      return;
-    }
-
-    setWizard(prev => ({ ...prev, loading: true }));
-    try {
-      const aiItinerary = await generateAIItinerary(wizard.destination);
-      
-      const newTripId = 'trip_' + Date.now();
-      setCurrentTripId(newTripId);
-
-      const newSettings: TripSettings = {
-        isSetup: true,
-        destination: wizard.destination,
-        startDate: wizard.date || new Date().toISOString().split('T')[0],
-        days: 3,
-        users: ['Me'],
-        currencyCode: 'USD',
-        currencySymbol: '$',
-        targetLang: 'en',
-        langName: 'English',
-      };
-
-      setSettings(newSettings);
-      
-      const newItinerary: ItineraryItem[] = aiItinerary.map((item, index) => ({
-        id: Date.now() + index,
-        dayIndex: item.dayIndex || 0,
-        time: item.time || '12:00',
-        location: item.location,
-        note: item.note,
-        lat: 0,
-        lon: 0,
-      }));
-
-      setItinerary(newItinerary);
-      setExpenses([]);
-      
-      await saveData();
-      setViewState('app');
-
-      // Fetch coordinates for all items
-      for (const item of newItinerary) {
-        try {
-          const coords = await getCoordinates(item.location);
-          setItinerary(prev => prev.map(i => 
-            i.id === item.id ? { ...i, lat: coords.lat, lon: coords.lon } : i
-          ));
-        } catch (e) {}
-      }
-      await saveData();
-    } catch (e) {
-      console.error('AI Generation Failed', e);
-      alert('AI service unavailable or blocked. Creating a basic plan instead.');
-      handleFinishWizard();
-    } finally {
-      setWizard(prev => ({ ...prev, loading: false }));
-    }
-  };
-
-  const handleFinishWizard = async () => {
-    const info = wizard.tempData;
-    if (!info) return;
-    
-    const langMap: Record<string, string> = {
-      'Japanese': 'ja',
-      'English': 'en',
-      'French': 'fr',
-      'German': 'de',
-      'Spanish': 'es',
-      'Italian': 'it',
-      'Chinese': 'zh',
-    };
-    const targetLang = langMap[info.langName || ''] || info.country_code || 'en';
-
-    const newTripId = 'trip_' + Date.now();
-    setCurrentTripId(newTripId);
-
-    const newSettings: TripSettings = {
-      isSetup: true,
-      destination: wizard.destination,
-      startDate: wizard.date,
-      days: 3,
-      users: ['Me', 'Partner'],
-      currencyCode: wizard.currencyCode.toUpperCase(),
-      currencySymbol: info.currencySymbol || '$',
-      targetLang: targetLang,
-      langName: info.langName || 'English',
-    };
-
-    setSettings(newSettings);
-
-    let startLoc: ItineraryItem[];
-    if (info.latitude && info.longitude) {
-      startLoc = [{
-        id: Date.now(),
-        dayIndex: 0,
-        time: '10:00',
-        location: wizard.destination + ' (Arrival)',
-        note: 'Flight Arrival',
-        lat: info.latitude,
-        lon: info.longitude,
-      }];
-    } else {
-      startLoc = [{
-        id: Date.now(),
-        dayIndex: 0,
-        time: '10:00',
-        location: 'Arrival',
-        note: 'Flight Arrival',
-        lat: 0,
-        lon: 0,
-      }];
-    }
-
-    setItinerary(startLoc);
-    setExpenses([]);
-
-    await fetchExchangeRate(newSettings.currencyCode).then(rate => setRealTimeRate(rate));
-    await saveData();
-    setViewState('app');
-
-    if (info.latitude && info.longitude) {
-      const weather = await fetchWeather(info.latitude, info.longitude);
-      if (weather) {
-        setItinerary(prev => prev.map(i => 
-          i.id === startLoc[0].id ? { ...i, weather } : i
-        ));
-        await saveData();
-      }
-    }
-  };
-
-  const cancelWizard = () => {
-    if (Object.keys(allTrips).length > 0) {
-      const ids = Object.keys(allTrips);
-      switchTrip(currentTripId || ids[0]);
-    }
-  };
+  
 
   // Map functions
   const initMap = async () => {
@@ -627,7 +379,6 @@ function App() {
   const createNewTrip = () => {
     tripCreateNewTrip();
     setShowHistoryModal(false);
-    setWizard(prev => ({ ...prev, destination: '', date: '', step: 1 }));
     setViewState('wizard');
   };
 
@@ -657,195 +408,22 @@ function App() {
 
         {/* Login */}
         {viewState === 'login' && (
-          <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center p-6 text-center">
-            <div className="absolute inset-0 bg-white/40 backdrop-blur-xl z-0"></div>
-            <div className="relative z-10 w-full max-w-sm space-y-10">
-              <div className="space-y-4">
-                <div className="mx-auto mb-6 transform -rotate-12 hover:rotate-0 transition-transform duration-500">
-                  <i className="ph ph-airplane-tilt text-8xl text-stone-800 drop-shadow-sm"></i>
-                </div>
-                <h1 className="text-6xl font-bold text-stone-800 tracking-tight">TravelFlow</h1>
-                <p className="text-stone-600 font-medium text-lg tracking-wide">Your Journey, Synced.</p>
-              </div>
-              <div className="glass-panel p-8 rounded-[40px] space-y-4 shadow-xl ring-1 ring-white/60">
-                <button
-                  onClick={loginGoogle}
-                  className="w-full bg-white hover:bg-stone-50 text-stone-700 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-md border border-stone-100 transition-all active:scale-[0.98]"
-                >
-                  Continue with Google
-                </button>
-                <button
-                  onClick={handleLoginAnonymously}
-                  className="w-full bg-stone-800 text-amber-50 py-4 rounded-2xl font-bold transition-all hover:bg-stone-700 active:scale-[0.98]"
-                >
-                  Start as Guest
-                </button>
-              </div>
-            </div>
-          </div>
+          <LoginView loginGoogle={loginGoogle} loginAnonymously={loginAnonymously} handleLoginAnonymously={handleLoginAnonymously} />
         )}
 
         {/* Wizard */}
         {viewState === 'wizard' && (
-          <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 text-center overflow-y-auto custom-scroll">
-            <div className="absolute inset-0 bg-white/40 backdrop-blur-xl z-0"></div>
-
-            {Object.keys(allTrips).length > 0 && (
-              <button
-                onClick={cancelWizard}
-                className="absolute top-10 left-6 z-20 w-12 h-12 rounded-full glass-panel flex items-center justify-center text-stone-600 hover:text-stone-800 transition-colors"
-              >
-                <i className="ph ph-arrow-left text-xl"></i>
-              </button>
-            )}
-
-            <div className="relative z-10 w-full max-w-4xl flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12">
-              {/* 3D Globe Visualization for Wizard */}
-              <div className="order-1 md:order-2 flex flex-col items-center">
-                <div id="wizard-globe-wrapper" className="w-[250px] h-[250px] rounded-full overflow-hidden bg-transparent">
-                  <Globe
-                    width={250}
-                    height={250}
-                    destination={wizard.tempData ? {
-                      lat: wizard.tempData.latitude,
-                      lon: wizard.tempData.longitude,
-                      name: wizard.destination,
-                    } : null}
-                    isMini={true}
-                  />
-                </div>
-                <div className="mt-4 text-stone-500 font-bold text-sm tracking-wide uppercase opacity-70">
-                  Preview Destination
-                </div>
-              </div>
-
-              {/* Input Form */}
-              <div className="w-full md:w-1/2 max-w-md order-2 md:order-1">
-                {wizard.step === 1 && (
-                  <div className="space-y-8">
-                    <div>
-                      <h1 className="text-5xl font-bold text-stone-800 tracking-tight mb-2">Plan Trip</h1>
-                      <p className="text-stone-500 font-medium">Where is your next adventure?</p>
-                    </div>
-
-                    <div className="glass-panel p-8 rounded-[40px] text-left space-y-6 shadow-xl relative">
-                      <div className="relative">
-                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">Destination</label>
-                        <input
-                          value={wizard.destination}
-                          onChange={onDestinationInput}
-                          type="text"
-                          placeholder="e.g. Tokyo"
-                          className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-xl font-bold text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50 transition-all font-num relative z-20"
-                        />
-
-                        {/* Suggestions Dropdown */}
-                        {wizard.suggestions.length > 0 && (
-                          <div className="absolute left-0 right-0 top-full mt-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 z-50 overflow-hidden max-h-60 overflow-y-auto divide-y divide-stone-100">
-                            {wizard.suggestions.map((item, index) => (
-                              <div
-                                key={index}
-                                onClick={() => selectSuggestion(item)}
-                                className="px-5 py-3 hover:bg-orange-50 cursor-pointer transition-colors flex items-center gap-3"
-                              >
-                                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-500 shrink-0">
-                                  <i className="ph ph-airplane-tilt"></i>
-                                </div>
-                                <div className="text-left overflow-hidden">
-                                  <div className="text-sm font-bold text-stone-800 truncate">{item.name}</div>
-                                  <div className="text-xs text-stone-500 truncate">
-                                    {[item.admin1, item.country].filter(Boolean).join(', ')}
-                                  </div>
-                                </div>
-                                {item.country_code && (
-                                  <div className="ml-auto text-xs font-bold text-stone-300 uppercase">{item.country_code}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">Start Date</label>
-                        <input
-                          value={wizard.date}
-                          onChange={(e) => setWizard(prev => ({ ...prev, date: e.target.value }))}
-                          type="date"
-                          className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-lg font-medium text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50 transition-all font-num"
-                        />
-                      </div>
-                      <button
-                        onClick={detectDetails}
-                        disabled={wizard.loading}
-                        className="w-full bg-stone-800 text-amber-50 py-5 rounded-2xl font-bold text-lg hover:bg-stone-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-                      >
-                        {wizard.loading ? (
-                          <>
-                            <i className="ph ph-spinner animate-spin"></i> Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            Next <i className="ph ph-arrow-right"></i>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {wizard.step === 2 && (
-                  <div className="space-y-6">
-                    <h2 className="text-3xl font-bold text-stone-800">Confirm Details</h2>
-                    <div className="glass-panel p-6 rounded-[32px] text-left space-y-5 shadow-xl">
-                      <div className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-white/50">
-                        <div className="w-12 h-12 bg-blue-100/50 rounded-full flex items-center justify-center text-blue-600 shrink-0">
-                          <i className="ph ph-map-pin text-xl"></i>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-stone-400 uppercase font-bold tracking-widest">Destination</div>
-                          <div className="text-xl font-bold text-stone-800 truncate max-w-[200px]">{wizard.destination}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-white/50">
-                        <div className="w-12 h-12 bg-green-100/50 rounded-full flex items-center justify-center text-green-600 shrink-0">
-                          <i className="ph ph-currency-circle-dollar text-xl"></i>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-[10px] text-stone-400 uppercase font-bold tracking-widest">Currency</div>
-                          <input
-                            value={wizard.currencyCode}
-                            onChange={(e) => setWizard(prev => ({ ...prev, currencyCode: e.target.value }))}
-                            className="w-full bg-transparent border-b border-stone-300 font-bold text-xl text-stone-800 outline-none focus:border-orange-400 py-1 font-num"
-                            type="text"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-3 pt-4">
-                        <button
-                          onClick={() => setWizard(prev => ({ ...prev, step: 1 }))}
-                          className="flex-1 py-4 text-stone-500 font-bold hover:text-stone-800 transition-colors"
-                        >
-                          Back
-                        </button>
-                        <button
-                          onClick={handleGenerateAIItinerary}
-                          className="flex-[2] bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                        >
-                          <i className="ph ph-sparkle"></i> AI Generate Trip
-                        </button>
-                        <button
-                          onClick={handleFinishWizard}
-                          className="flex-[2] bg-stone-800 text-amber-50 py-4 rounded-2xl font-bold shadow-lg hover:bg-stone-700 active:scale-[0.98] transition-all"
-                        >
-                          Manual Start
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <Wizard
+            setSettings={setSettings}
+            setItinerary={setItinerary}
+            setExpenses={setExpenses}
+            saveData={saveData}
+            setCurrentTripId={setCurrentTripId}
+            setViewState={setViewState}
+            allTrips={allTrips}
+            switchTrip={switchTrip}
+            currentTripId={currentTripId}
+          />
         )}
 
         {/* Dashboard */}
@@ -864,180 +442,27 @@ function App() {
             <main className="flex-1 overflow-y-auto hide-scrollbar pb-safe-nav px-6 relative z-10 custom-scroll">
               {/* Itinerary */}
               {activeTab === 'itinerary' && (
-                <div className="pt-6 space-y-8">
-                  <div className="sticky top-0 z-20 -mx-6 px-6 py-4">
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#FFFDE7]/0 via-[#FFFDE7]/0 to-transparent pointer-events-none"></div>
-                    <div className="flex overflow-x-auto gap-3 p-6 -m-6 hide-scrollbar snap-x snap-mandatory relative z-10">
-                      {Array.from({ length: settings.days }).map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentDayIndex(index)}
-                          className={`flex flex-col items-center justify-center min-w-[70px] h-[84px] rounded-[24px] transition-all duration-300 snap-center shrink-0 border backdrop-blur-md ${
-                            currentDayIndex === index
-                              ? 'bg-stone-800 text-amber-50 border-stone-800 shadow-xl scale-105'
-                              : 'bg-white/40 text-stone-500 border-white/50 hover:bg-white/60'
-                          }`}
-                        >
-                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Day</span>
-                          <span className="text-3xl font-bold font-num">{index + 1}</span>
-                        </button>
-                      ))}
-                      <button
-                        onClick={addDay}
-                        className="flex flex-col items-center justify-center min-w-[70px] h-[84px] rounded-[24px] bg-white/30 text-stone-400 border border-white/30 hover:bg-white/50 shrink-0 snap-center backdrop-blur-md"
-                      >
-                        <i className="ph ph-plus text-2xl"></i>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-6 relative min-h-[50vh] pb-40">
-                    <div className="absolute left-[19px] top-6 bottom-0 w-0.5 bg-stone-400/30 border-l border-dashed border-stone-400/30 z-0"></div>
-                    {filteredItinerary.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-stone-400 z-10 relative">
-                        <div className="w-24 h-24 rounded-full bg-white/40 flex items-center justify-center mb-4 shadow-sm backdrop-blur-sm">
-                          <i className="ph ph-map-trifold text-4xl opacity-50"></i>
-                        </div>
-                        <p className="font-bold text-lg">Empty Schedule</p>
-                      </div>
-                    ) : (
-                      filteredItinerary.map((item) => (
-                        <div key={item.id} className="relative z-10 pl-14 group">
-                          <div className="absolute left-[13px] top-7 w-3.5 h-3.5 bg-white border-4 border-stone-700 rounded-full z-10 shadow-[0_0_0_4px_rgba(255,255,255,0.4)]"></div>
-                          <div
-                            className="glass-card p-6 rounded-[32px] cursor-pointer overflow-hidden relative"
-                            onClick={() => editItem(item)}
-                          >
-                            <div className="absolute -right-6 -top-6 w-24 h-24 bg-gradient-to-br from-orange-100 to-yellow-100 rounded-full blur-2xl opacity-60 pointer-events-none"></div>
-                            <div className="flex justify-between items-start mb-2 relative z-10">
-                              <span className="text-stone-800 font-num font-bold text-2xl tracking-tight">{item.time}</span>
-                              {item.weather && (
-                                <div className="flex items-center gap-1.5 text-stone-600 bg-white/60 backdrop-blur px-3 py-1 rounded-full text-xs font-bold border border-white/60 shadow-sm font-num">
-                                  <i className={`ph ${getWeatherIcon(item.weather.code)} text-sm`}></i>
-                                  <span>{item.weather.temp}°</span>
-                                </div>
-                              )}
-                            </div>
-                            <h3 className="font-bold text-stone-800 text-xl mb-2 leading-snug relative z-10">{item.location}</h3>
-                            {item.note && (
-                              <p className="text-stone-600 text-sm font-medium leading-relaxed mb-4 line-clamp-2 relative z-10 bg-white/30 p-2 rounded-xl">
-                                {item.note}
-                              </p>
-                            )}
-                            <div className="flex gap-2 pt-2 border-t border-stone-200/50 relative z-10">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAskAI(item);
-                                }}
-                                className="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold shadow-sm"
-                              >
-                                <i className="ph ph-sparkle"></i> Ask AI
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openGlobeModal(item);
-                                }}
-                                className="flex-1 bg-white/50 hover:bg-white text-stone-600 hover:text-orange-700 text-sm py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold shadow-sm"
-                              >
-                                <i className="ph ph-globe-hemisphere-west"></i> Show on Globe
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteItineraryItem(item.id);
-                                }}
-                                className="w-12 bg-white/50 hover:bg-rose-50 text-stone-400 hover:text-rose-500 py-3 rounded-2xl flex items-center justify-center transition-all shadow-sm"
-                              >
-                                <i className="ph ph-trash text-lg"></i>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <ItineraryView
+                  currentDayIndex={currentDayIndex}
+                  setCurrentDayIndex={setCurrentDayIndex}
+                  settingsDays={settings.days}
+                  filteredItinerary={filteredItinerary}
+                  addDay={addDay}
+                  editItem={editItem}
+                  openGlobeModal={openGlobeModal}
+                  handleAskAI={handleAskAI}
+                  handleDeleteItineraryItem={handleDeleteItineraryItem}
+                />
               )}
 
-              {/* Wallet */}
               {activeTab === 'wallet' && (
-                <div className="pt-6 space-y-8 pb-40">
-                  <div className="glass-dark rounded-[40px] p-8 shadow-2xl relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400 to-yellow-500 rounded-full blur-[80px] opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="text-stone-400 text-xs font-bold uppercase tracking-[0.2em]">Total Spent</div>
-                        <div className="bg-white/10 px-3 py-1 rounded-xl text-[10px] font-bold backdrop-blur-md border border-white/10">
-                          {settings.currencyCode}
-                        </div>
-                      </div>
-                      <div className="flex items-baseline gap-1 mb-1">
-                        <span className="text-3xl font-light font-num text-stone-300">{settings.currencySymbol}</span>
-                        <span className="text-6xl font-bold tracking-tight text-white font-num">{totalExpense.toLocaleString()}</span>
-                      </div>
-                      <div className="text-stone-400 text-sm mb-10 flex items-center gap-2 font-medium">
-                        <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></div>
-                        ≈ HKD <span className="font-num">${Math.round(totalExpense * realTimeRate).toLocaleString()}</span>
-                        <span className="opacity-40 text-xs font-mono">({realTimeRate.toFixed(3)})</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {Object.entries(balances).map(([name, balance]) => (
-                          <div key={name} className="bg-white/5 p-5 rounded-3xl border border-white/5 backdrop-blur-sm">
-                            <div className="text-[10px] text-stone-400 uppercase tracking-wider mb-2 font-bold">
-                              {name} {balance >= 0 ? 'Gets' : 'Pays'}
-                            </div>
-                            <div className={`text-xl font-bold font-num ${balance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                              {settings.currencySymbol}{Math.abs(balance).toLocaleString()}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-stone-800 text-lg mb-5 ml-2 flex items-center gap-2">
-                      <span className="w-2 h-6 bg-stone-800 rounded-full"></span>Recent
-                    </h3>
-                    <div className="space-y-4">
-                      {expenses.length === 0 ? (
-                        <div className="text-center py-12 border-2 border-dashed border-stone-300/30 rounded-[32px] bg-white/20">
-                          <p className="text-stone-500 font-bold">No expenses yet</p>
-                        </div>
-                      ) : (
-                        expenses.map((expense) => (
-                          <div key={expense.id} className="glass-card p-5 rounded-3xl flex justify-between items-center">
-                            <div className="flex items-center gap-5">
-                              <div className="w-14 h-14 rounded-[20px] bg-white/60 border border-white flex items-center justify-center text-stone-400 shadow-sm">
-                                <i className="ph ph-receipt text-2xl"></i>
-                              </div>
-                              <div>
-                                <div className="font-bold text-stone-800 text-lg leading-tight mb-1">{expense.title}</div>
-                                <div className="text-xs font-bold text-stone-500 flex items-center gap-1 bg-white/50 px-2 py-0.5 rounded-lg w-max">
-                                  <i className="ph ph-user"></i>{expense.payer}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold font-num text-stone-800 text-xl">
-                                {settings.currencySymbol}{expense.amount.toLocaleString()}
-                              </div>
-                              <div className="text-[10px] font-bold font-num text-stone-400 mt-1 bg-stone-100/80 px-2 py-1 rounded-lg inline-block">
-                                ≈ ${Math.round(expense.amount * realTimeRate).toLocaleString()}
-                              </div>
-                              <button
-                                onClick={() => handleDeleteExpense(expense.id)}
-                                className="block ml-auto mt-2 text-xs font-bold text-rose-300 hover:text-rose-500 transition-colors uppercase tracking-wider"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <WalletView
+                  expenses={expenses}
+                  balances={balances}
+                  settings={settings}
+                  realTimeRate={realTimeRate}
+                  handleDeleteExpense={handleDeleteExpense}
+                />
               )}
 
               {/* Map */}
