@@ -170,7 +170,9 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
           setItinerary((prev: any[]) => prev.map((i: any) =>
             i.id === item.id ? { ...i, lat: coords.lat, lon: coords.lon } : i
           ));
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Failed to get coordinates for AI itinerary item', e);
+        }
       }
       await saveData();
     } catch (e) {
@@ -245,7 +247,9 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
     // Fetch exchange rate for side-effects if needed; ignore result here
     try {
       await fetchExchangeRate(newSettings.currencyCode);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Exchange rate fetch failed', e);
+    }
     await saveData();
     setViewState('app');
 
