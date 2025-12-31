@@ -1,4 +1,3 @@
-import React from 'react';
 import { ItineraryItem } from '../types';
 import { getWeatherIcon } from '../lib/api';
 

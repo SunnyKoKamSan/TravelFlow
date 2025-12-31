@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTrip } from './hooks/useTrip';
 // useDebounce and wizard-related helpers moved into Wizard component
-import Globe from './components/Globe';
 import Header from './components/Header';
 import NavBar from './components/NavBar';
 import FAB from './components/FAB';
@@ -408,7 +407,7 @@ function App() {
 
         {/* Login */}
         {viewState === 'login' && (
-          <LoginView loginGoogle={loginGoogle} loginAnonymously={loginAnonymously} handleLoginAnonymously={handleLoginAnonymously} />
+          <LoginView loginGoogle={loginGoogle} handleLoginAnonymously={handleLoginAnonymously} />
         )}
 
         {/* Wizard */}

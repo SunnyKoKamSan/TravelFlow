@@ -1,12 +1,9 @@
-import React from 'react';
-
 interface LoginViewProps {
   loginGoogle: () => void;
-  loginAnonymously: () => void;
   handleLoginAnonymously: () => void;
 }
 
-export default function LoginView({ loginGoogle, loginAnonymously, handleLoginAnonymously }: LoginViewProps) {
+export default function LoginView({ loginGoogle, handleLoginAnonymously }: LoginViewProps) {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center p-6 text-center">
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl z-0"></div>

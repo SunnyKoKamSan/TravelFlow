@@ -48,7 +48,7 @@ export const getCoordinates = async (location: string): Promise<{ lat: number; l
 };
 
 // Weather API
-export const fetchWeather = async (lat: number, lon: number): Promise<WeatherData | null> => {
+export const fetchWeather = async (lat: number, lon: number): Promise<WeatherData | undefined> => {
   try {
     const res = await safeFetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`,
@@ -60,9 +60,9 @@ export const fetchWeather = async (lat: number, lon: number): Promise<WeatherDat
           temp: Math.round(data.current_weather.temperature),
           code: data.current_weather.weathercode,
         }
-      : null;
+      : undefined;
   } catch (e) {
-    return null;
+    return undefined;
   }
 };
 
