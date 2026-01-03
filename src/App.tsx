@@ -229,6 +229,22 @@ function App() {
     }
   }, [activeTab, filteredItinerary]);
 
+  // Update modal map when globe modal opens or activeItemForGlobe changes
+  useEffect(() => {
+    if (showGlobeModal && activeItemForGlobe) {
+      const lat = activeItemForGlobe.lat || 0;
+      const lon = activeItemForGlobe.lon || 0;
+      if (lat !== 0 && lon !== 0) {
+        setTimeout(() => initModalMap(lat, lon), 200);
+      } else if (activeItemForGlobe.location) {
+        // Fetch coordinates if not already set
+        getCoordinates(activeItemForGlobe.location).then(coords => {
+          setTimeout(() => initModalMap(coords.lat, coords.lon), 200);
+        });
+      }
+    }
+  }, [showGlobeModal, activeItemForGlobe]);
+
   // Globe modal
   const openGlobeModal = async (item: ItineraryItem) => {
     setActiveItemForGlobe(item);
@@ -350,14 +366,14 @@ function App() {
   const handleAskAI = async (item: ItineraryItem) => {
     setShowAIModal(true);
     setAiLoading(true);
-    setAiResponse('');
+    setAiResponse('Loading recommendations...');
 
     try {
       const response = await askAI(item.location);
       setAiResponse(response);
     } catch (e) {
       console.error('AI Assistant Failed', e);
-      setAiResponse('AI is currently unavailable due to network restrictions or offline mode. Please check your connection.');
+      setAiResponse('AI recommendations are currently unavailable. Please try again later or check your Hugging Face API key configuration.');
     } finally {
       setAiLoading(false);
     }
