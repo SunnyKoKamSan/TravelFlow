@@ -1,0 +1,197 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+[v-cloak] {
+  display: none !important;
+}
+
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+}
+
+body {
+  font-family: 'Quicksand', 'M PLUS Rounded 1c', sans-serif;
+  background-color: #FFFDE7;
+  color: #424242;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6, input, textarea, button, select, span, div, p, a {
+  font-family: inherit !important;
+}
+
+.font-num {
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbar Styling */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom Scrollbar for content */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Background */
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(160deg, #FFFDE7 0%, #FFF3E0 60%, #FFE0B2 100%);
+  z-index: -2;
+}
+
+.ambient-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: -1;
+  opacity: 0.5;
+  animation: float 12s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(20px, -20px);
+  }
+}
+
+/* Glass Utils */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px 0 rgba(235, 180, 100, 0.05);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 12px -2px rgba(94, 59, 23, 0.03);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.glass-card:active {
+  transform: scale(0.98);
+}
+
+.glass-dark {
+  background: rgba(45, 40, 35, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #FFF8E1;
+  box-shadow: 0 20px 40px -10px rgba(60, 40, 20, 0.2);
+}
+
+.glass-modal {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(110px + var(--sab));
+}
+
+.pt-safe-top {
+  padding-top: max(24px, var(--sat));
+}
+
+/* Globe Specific */
+#mini-globe-container canvas {
+  border-radius: 50%;
+}
+
+#wizard-globe-wrapper {
+  width: 250px;
+  height: 250px;
+  margin: 0 auto;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+}
+
+#map-container-fix {
+  height: 100%;
+  width: 100%;
+  min-height: 60vh;
+}
+
+#modal-map-container {
+  height: 300px;
+  width: 100%;
+  border-radius: 24px;
+  z-index: 10;
+}
+
+/* Map rounding and clipping fix: ensure leaflet/map tiles are clipped to the container's border-radius */
+#map, #modal-map {
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.leaflet-container {
+  border-radius: inherit;
+  overflow: hidden;
+}
