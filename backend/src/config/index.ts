@@ -8,8 +8,6 @@ export const config = {
   API_URL: process.env.API_URL || 'http://localhost:5000',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
 
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://mongo:27017/travelflow',
-
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
   
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',

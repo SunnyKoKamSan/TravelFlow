@@ -2,9 +2,10 @@ interface MapPanelProps {
   mapReady: boolean;
   currentDayIndex: number;
   locateUser: () => void;
+  isTrackingLocation?: boolean;
 }
 
-export default function MapPanel({ mapReady, currentDayIndex, locateUser }: MapPanelProps) {
+export default function MapPanel({ mapReady, currentDayIndex, locateUser, isTrackingLocation }: MapPanelProps) {
   return (
     <div className="h-full relative w-full bg-stone-100 rounded-[40px] shadow-inner flex flex-col overflow-hidden">
       <div id="map-container-fix" className="flex-1 relative w-full h-full">
@@ -22,10 +23,14 @@ export default function MapPanel({ mapReady, currentDayIndex, locateUser }: MapP
         <div className="w-px h-4 bg-stone-300"></div>
         <button
           onClick={locateUser}
-          className="text-stone-800 hover:text-orange-600 transition-colors flex items-center gap-2 font-bold"
+          className={`transition-colors flex items-center gap-2 font-bold ${
+            isTrackingLocation 
+              ? 'text-blue-600 hover:text-blue-700' 
+              : 'text-stone-800 hover:text-orange-600'
+          }`}
         >
-          <i className="ph ph-crosshair text-lg"></i>
-          <span className="text-xs">Locate</span>
+          <i className={`ph ${isTrackingLocation ? 'ph-crosshair-simple' : 'ph-crosshair'} text-lg ${isTrackingLocation ? 'animate-pulse' : ''}`}></i>
+          <span className="text-xs">{isTrackingLocation ? 'Tracking' : 'Locate'}</span>
         </button>
       </div>
     </div>

@@ -8,10 +8,13 @@ help:
 	@echo "dev-frontend   - Run only frontend"
 	@echo "dev-backend    - Run only backend (local, no Docker)"
 	@echo "docker-up      - Start backend with Docker Compose"
-	@echo "docker-down    - Stop all Docker services"
+	@echo "docker-down    - Stop Docker services"
 	@echo "docker-logs    - View Docker logs"
-	@echo "build          - Build frontend for production"
+	@echo "build          - Build both frontend and backend for production"
+	@echo "build-frontend - Build only frontend"
+	@echo "build-backend  - Build only backend"
 	@echo "lint           - Run linting on all projects"
+	@echo "clean          - Remove all build artifacts and node_modules"
 
 setup:
 	@echo "Setting up TravelFlow Pro..."
@@ -24,7 +27,7 @@ setup:
 	@echo ""
 	@echo "Next steps:"
 	@echo "1. Copy .env.example files to .env.local (frontend) and .env (backend)"
-	@echo "2. Fill in your API keys"
+	@echo "2. Fill in your API keys (Firebase, Gemini)"
 	@echo "3. Run 'make dev' or 'make docker-up' to start"
 
 dev: dev-frontend dev-backend
@@ -36,25 +39,23 @@ dev-backend:
 	@cd backend && npm run dev
 
 docker-up:
-	docker-compose up -d
-	@echo "✅ Backend and MongoDB started"
+	docker-compose up --build
+	@echo "✅ Backend started"
 	@echo "Backend: http://localhost:5000"
-	@echo "MongoDB: localhost:27017"
 
 docker-down:
 	docker-compose down
 
 docker-logs:
-	docker-compose logs -f
-
-docker-logs-backend:
 	docker-compose logs -f backend
 
-docker-logs-mongo:
-	docker-compose logs -f mongo
+build: build-frontend build-backend
 
-build:
+build-frontend:
 	cd frontend && npm run build
+
+build-backend:
+	cd backend && npm run build
 
 lint:
 	cd frontend && npm run lint

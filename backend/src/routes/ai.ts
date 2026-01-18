@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import AITripPlannerService from '@/services/AITripPlannerService.js';
-import LocationService from '@/services/LocationService.js';
+import AITripPlannerService from '../services/AITripPlannerService.js';
+import LocationService from '../services/LocationService.js';
 
 const router = Router();
 

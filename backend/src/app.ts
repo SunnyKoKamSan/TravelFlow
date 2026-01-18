@@ -1,7 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import config from '@/config/index.js';
-import aiRoutes from '@/routes/ai.js';
+import config from './config/index.js';
+import aiRoutes from './routes/ai.js';
 
 const app: Express = express();
 

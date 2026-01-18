@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from 'google-generative-ai';
-import config from '@/config/index.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import config from '../config/index.js';
 
 interface ItineraryItem {
   dayIndex: number;
@@ -71,6 +71,9 @@ Requirements:
 6. Include practical information like transport between locations
 7. Consider weather, opening hours, and realistic travel times
 8. Add at least 3 hidden gems or lesser-known but excellent spots
+9. Ensure cultural sensitivity and local customs are respected
+10. The locations must be well-distributed throughout the day to avoid backtracking
+11. Planning should not be repeated throughout the itinerary
 
 FOCUS ON: Famous attractions, Michelin-recommended or highly-rated restaurants, Local festivals/events, Cultural experiences
 
@@ -138,7 +141,7 @@ Return ONLY valid JSON, nothing else.`;
       const response = await result.response;
       const text = response.text();
 
-      return text.split('\n').filter((line) => line.trim().length > 0);
+      return text.split('\n').filter((line: string) => line.trim().length > 0);
     } catch (error) {
       console.error(`Error getting ${activityType} recommendations:`, error);
       throw error;

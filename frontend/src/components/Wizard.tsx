@@ -27,15 +27,46 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
   const [wizard, setWizard] = useState({
     step: 1,
     destination: '',
-    date: '',
+    departureCity: '',
+    startDate: '',
+    endDate: '',
     loading: false,
     currencyCode: '',
+    autoUpdateRate: true,
     tempData: null as GeocodeResult | null,
+    departureData: null as GeocodeResult | null,
     isSearching: false,
+    isSearchingDeparture: false,
     suggestions: [] as GeocodeResult[],
+    departureSuggestions: [] as GeocodeResult[],
   });
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const departureSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const calculateDays = (start: string, end: string): number => {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffTime = endDate.getTime() - startDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const CURRENCIES = [
+    { code: 'USD', symbol: '$', name: 'US Dollar' },
+    { code: 'EUR', symbol: '€', name: 'Euro' },
+    { code: 'GBP', symbol: '£', name: 'British Pound' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+    { code: 'KRW', symbol: '₩', name: 'Korean Won' },
+    { code: 'TWD', symbol: 'NT$', name: 'Taiwan Dollar' },
+    { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
+    { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+    { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+    { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+  ];
 
   useEffect(() => {
     if (wizard.destination.length < 2) {
@@ -44,19 +75,64 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
     }
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setWizard(prev => ({ ...prev, isSearching: true }));
+    
+    let isCancelled = false;
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const results = await searchLocation(wizard.destination);
-        setWizard(prev => ({ ...prev, suggestions: results, isSearching: false }));
+        if (!isCancelled) {
+          setWizard(prev => ({ ...prev, suggestions: results, isSearching: false }));
+        }
       } catch (e) {
         console.error(e);
-        setWizard(prev => ({ ...prev, isSearching: false }));
+        if (!isCancelled) {
+          setWizard(prev => ({ ...prev, isSearching: false }));
+        }
       }
     }, 300);
+    
+    return () => {
+      isCancelled = true;
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
   }, [wizard.destination]);
+
+  // Departure city search
+  useEffect(() => {
+    if (wizard.departureCity.length < 2) {
+      setWizard(prev => ({ ...prev, departureSuggestions: [] }));
+      return;
+    }
+    if (departureSearchTimeoutRef.current) clearTimeout(departureSearchTimeoutRef.current);
+    setWizard(prev => ({ ...prev, isSearchingDeparture: true }));
+    
+    let isCancelled = false;
+    departureSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await searchLocation(wizard.departureCity);
+        if (!isCancelled) {
+          setWizard(prev => ({ ...prev, departureSuggestions: results, isSearchingDeparture: false }));
+        }
+      } catch (e) {
+        console.error(e);
+        if (!isCancelled) {
+          setWizard(prev => ({ ...prev, isSearchingDeparture: false }));
+        }
+      }
+    }, 300);
+    
+    return () => {
+      isCancelled = true;
+      if (departureSearchTimeoutRef.current) clearTimeout(departureSearchTimeoutRef.current);
+    };
+  }, [wizard.departureCity]);
 
   const onDestinationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setWizard(prev => ({ ...prev, destination: e.target.value, tempData: null }));
+  };
+
+  const onDepartureCityInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setWizard(prev => ({ ...prev, departureCity: e.target.value, departureData: null }));
   };
 
   const selectSuggestion = (item: GeocodeResult) => {
@@ -65,6 +141,22 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
       destination: item.name,
       suggestions: [],
       tempData: {
+        name: item.name,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        country_code: item.country_code,
+        country: item.country,
+        admin1: item.admin1,
+      },
+    }));
+  };
+
+  const selectDepartureSuggestion = (item: GeocodeResult) => {
+    setWizard(prev => ({
+      ...prev,
+      departureCity: item.name,
+      departureSuggestions: [],
+      departureData: {
         name: item.name,
         latitude: item.latitude,
         longitude: item.longitude,
@@ -86,8 +178,13 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
       }
     }
 
-    if (!wizard.destination || !wizard.date) {
+    if (!wizard.destination || !wizard.startDate || !wizard.endDate) {
       alert('Please fill in all fields');
+      return;
+    }
+
+    if (calculateDays(wizard.startDate, wizard.endDate) <= 0) {
+      alert('End date must be after start date');
       return;
     }
 
@@ -128,21 +225,70 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
 
     setWizard(prev => ({ ...prev, loading: true }));
     try {
-      const aiItinerary = await generateAIItinerary(wizard.destination);
+      const days = calculateDays(wizard.startDate, wizard.endDate) || 3;
+      
+      const aiItinerary = await generateAIItinerary(wizard.destination, {
+        days,
+        departureCity: wizard.departureCity,
+        transportMode: 'flight',
+      });
 
       const newTripId = 'trip_' + Date.now();
       setCurrentTripId(newTripId);
+      
+      // Get departure country info if available
+      let departureCurrencyCode = 'USD';
+      let departureCurrencySymbol = '$';
+      let departureLangName = 'English';
+      let departureLangCode = 'en';
+      if (wizard.departureData?.country_code) {
+        try {
+          const depCountryInfo = await getCountryInfo(wizard.departureData.country_code);
+          if (depCountryInfo) {
+            departureCurrencyCode = depCountryInfo.currencyCode;
+            departureCurrencySymbol = depCountryInfo.currencySymbol;
+            departureLangName = depCountryInfo.langName;
+            departureLangCode = depCountryInfo.langCode;
+          }
+        } catch (e) {
+          console.warn('Failed to get departure country info');
+        }
+      }
+
+      // Get destination country language info
+      let destLangName = 'English';
+      let destLangCode = 'en';
+      if (wizard.tempData?.country_code) {
+        try {
+          const destCountryInfo = await getCountryInfo(wizard.tempData.country_code);
+          if (destCountryInfo) {
+            destLangName = destCountryInfo.langName;
+            destLangCode = destCountryInfo.langCode;
+          }
+        } catch (e) {
+          console.warn('Failed to get destination country info');
+        }
+      }
 
       const newSettings = {
         isSetup: true,
         destination: wizard.destination,
-        startDate: wizard.date || new Date().toISOString().split('T')[0],
-        days: 3,
+        startDate: wizard.startDate || new Date().toISOString().split('T')[0],
+        endDate: wizard.endDate,
+        days: days,
         users: ['Me'],
-        currencyCode: 'USD',
-        currencySymbol: '$',
-        targetLang: 'en',
-        langName: 'English',
+        currencyCode: wizard.currencyCode || 'USD',
+        currencySymbol: CURRENCIES.find(c => c.code === wizard.currencyCode)?.symbol || '$',
+        targetLang: destLangCode,
+        langName: destLangName,
+        autoUpdateRate: wizard.autoUpdateRate,
+        departureCity: wizard.departureCity || '',
+        departureCountry: wizard.departureData?.country || '',
+        departureCountryCode: wizard.departureData?.country_code || '',
+        departureCurrencyCode,
+        departureCurrencySymbol,
+        departureLangName,
+        departureLangCode,
       };
 
       setSettings(newSettings);
@@ -187,30 +333,64 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
     const info = wizard.tempData as any;
     if (!info) return;
 
-    const langMap: Record<string, string> = {
-      'Japanese': 'ja',
-      'English': 'en',
-      'French': 'fr',
-      'German': 'de',
-      'Spanish': 'es',
-      'Italian': 'it',
-      'Chinese': 'zh',
-    };
-    const targetLang = langMap[info.langName || ''] || info.country_code || 'en';
-
     const newTripId = 'trip_' + Date.now();
     setCurrentTripId(newTripId);
+
+    const days = calculateDays(wizard.startDate, wizard.endDate) || 3;
+
+    // Get departure country info if available
+    let departureCurrencyCode = 'USD';
+    let departureCurrencySymbol = '$';
+    let departureLangName = 'English';
+    let departureLangCode = 'en';
+    if (wizard.departureData?.country_code) {
+      try {
+        const depCountryInfo = await getCountryInfo(wizard.departureData.country_code);
+        if (depCountryInfo) {
+          departureCurrencyCode = depCountryInfo.currencyCode;
+          departureCurrencySymbol = depCountryInfo.currencySymbol;
+          departureLangName = depCountryInfo.langName;
+          departureLangCode = depCountryInfo.langCode;
+        }
+      } catch (e) {
+        console.warn('Failed to get departure country info');
+      }
+    }
+
+    // Get destination country language info
+    let destLangName = info.langName || 'English';
+    let destLangCode = 'en';
+    if (info.country_code) {
+      try {
+        const destCountryInfo = await getCountryInfo(info.country_code);
+        if (destCountryInfo) {
+          destLangName = destCountryInfo.langName;
+          destLangCode = destCountryInfo.langCode;
+        }
+      } catch (e) {
+        console.warn('Failed to get destination country info');
+      }
+    }
 
     const newSettings = {
       isSetup: true,
       destination: wizard.destination,
-      startDate: wizard.date,
-      days: 3,
+      startDate: wizard.startDate,
+      endDate: wizard.endDate,
+      days: days,
       users: ['Me', 'Partner'],
       currencyCode: (wizard.currencyCode || 'USD').toUpperCase(),
-      currencySymbol: info.currencySymbol || '$',
-      targetLang: targetLang,
-      langName: info.langName || 'English',
+      currencySymbol: CURRENCIES.find(c => c.code === wizard.currencyCode)?.symbol || info.currencySymbol || '$',
+      targetLang: destLangCode,
+      langName: destLangName,
+      autoUpdateRate: wizard.autoUpdateRate,
+      departureCity: wizard.departureCity || '',
+      departureCountry: wizard.departureData?.country || '',
+      departureCountryCode: wizard.departureData?.country_code || '',
+      departureCurrencyCode,
+      departureCurrencySymbol,
+      departureLangName,
+      departureLangCode,
     };
 
     setSettings(newSettings);
@@ -340,15 +520,72 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
                     </div>
                   )}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">Start Date</label>
+
+                {/* Departure City */}
+                <div className="relative">
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">Departing From</label>
                   <input
-                    value={wizard.date}
-                    onChange={(e) => setWizard(prev => ({ ...prev, date: e.target.value }))}
-                    type="date"
-                    className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-lg font-medium text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50 transition-all font-num"
+                    value={wizard.departureCity}
+                    onChange={onDepartureCityInput}
+                    type="text"
+                    placeholder="e.g. Hong Kong"
+                    autoComplete="off"
+                    className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-xl font-bold text-stone-800 outline-none focus:ring-2 focus:ring-blue-300/50 transition-all font-num relative z-10"
                   />
+
+                  {wizard.departureSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 z-40 overflow-hidden max-h-60 overflow-y-auto divide-y divide-stone-100">
+                      {wizard.departureSuggestions.map((item, index) => (
+                        <div
+                          key={index}
+                          onClick={() => selectDepartureSuggestion(item)}
+                          className="px-5 py-3 hover:bg-blue-50 cursor-pointer transition-colors flex items-center gap-3"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0">
+                            <i className="ph ph-house-line"></i>
+                          </div>
+                          <div className="text-left overflow-hidden">
+                            <div className="text-sm font-bold text-stone-800 truncate">{item.name}</div>
+                            <div className="text-xs text-stone-500 truncate">{[item.admin1, item.country].filter(Boolean).join(', ')}</div>
+                          </div>
+                          {item.country_code && (
+                            <div className="ml-auto text-xs font-bold text-stone-300 uppercase">{item.country_code}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">Start Date</label>
+                    <input
+                      value={wizard.startDate}
+                      onChange={(e) => setWizard(prev => ({ ...prev, startDate: e.target.value }))}
+                      type="date"
+                      className="w-full bg-white/60 border border-white/80 rounded-2xl px-4 py-4 text-base font-medium text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50 transition-all font-num"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2 ml-1">End Date</label>
+                    <input
+                      value={wizard.endDate}
+                      onChange={(e) => setWizard(prev => ({ ...prev, endDate: e.target.value }))}
+                      type="date"
+                      min={wizard.startDate}
+                      className="w-full bg-white/60 border border-white/80 rounded-2xl px-4 py-4 text-base font-medium text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50 transition-all font-num"
+                    />
+                  </div>
+                </div>
+                {wizard.startDate && wizard.endDate && calculateDays(wizard.startDate, wizard.endDate) > 0 && (
+                  <div className="flex items-center justify-center gap-2 py-2 px-4 bg-orange-100/50 rounded-xl border border-orange-200/50">
+                    <i className="ph ph-calendar-check text-orange-600"></i>
+                    <span className="text-orange-700 font-bold text-sm">
+                      {calculateDays(wizard.startDate, wizard.endDate)} Days Trip
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={detectDetails}
                   disabled={wizard.loading}
@@ -380,18 +617,49 @@ export default function Wizard({ setSettings, setItinerary, setExpenses, saveDat
                   </div>
                 </div>
                 <div className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-white/50">
+                  <div className="w-12 h-12 bg-amber-100/50 rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                    <i className="ph ph-calendar text-xl"></i>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-stone-400 uppercase font-bold tracking-widest">Duration</div>
+                    <div className="text-xl font-bold text-stone-800">
+                      {calculateDays(wizard.startDate, wizard.endDate)} Days
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-white/50">
                   <div className="w-12 h-12 bg-green-100/50 rounded-full flex items-center justify-center text-green-600 shrink-0">
                     <i className="ph ph-currency-circle-dollar text-xl"></i>
                   </div>
                   <div className="flex-1">
                     <div className="text-[10px] text-stone-400 uppercase font-bold tracking-widest">Currency</div>
-                    <input
+                    <select
                       value={wizard.currencyCode}
                       onChange={(e) => setWizard(prev => ({ ...prev, currencyCode: e.target.value }))}
-                      className="w-full bg-transparent border-b border-stone-300 font-bold text-xl text-stone-800 outline-none focus:border-orange-400 py-1 font-num"
-                      type="text"
-                    />
+                      className="w-full bg-transparent font-bold text-xl text-stone-800 outline-none cursor-pointer py-1"
+                    >
+                      {CURRENCIES.map(c => (
+                        <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                      ))}
+                    </select>
                   </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white/60 rounded-2xl border border-white/50">
+                  <div className="flex items-center gap-3">
+                    <i className="ph ph-arrows-clockwise text-stone-500"></i>
+                    <span className="text-sm font-bold text-stone-600">Auto-update exchange rate</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setWizard(prev => ({ ...prev, autoUpdateRate: !prev.autoUpdateRate }))}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${
+                      wizard.autoUpdateRate ? 'bg-orange-500' : 'bg-stone-300'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform ${
+                      wizard.autoUpdateRate ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}></div>
+                  </button>
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 
 interface Props {
   expenses: any[];
@@ -5,10 +6,26 @@ interface Props {
   settings: any;
   realTimeRate: number;
   handleDeleteExpense: (id: number) => void;
+  addExpense?: (expense: { title: string; amount: number; payer: string }) => void;
 }
 
-export default function WalletView({ expenses, balances, settings, realTimeRate, handleDeleteExpense }: Props) {
+export default function WalletView({ expenses, balances, settings, realTimeRate, handleDeleteExpense, addExpense }: Props) {
+  const [newTitle, setNewTitle] = useState('');
+  const [newAmount, setNewAmount] = useState('');
   const totalExpense = expenses.reduce((s, i) => s + i.amount, 0);
+
+  const handleAddExpense = () => {
+    if (!newTitle.trim() || !newAmount || Number(newAmount) <= 0) return;
+    if (addExpense) {
+      addExpense({
+        title: newTitle.trim(),
+        amount: Number(newAmount),
+        payer: settings.travelers?.[0] || 'Me'
+      });
+      setNewTitle('');
+      setNewAmount('');
+    }
+  };
 
   return (
     <div className="pt-6 space-y-8 pb-40">
@@ -83,6 +100,41 @@ export default function WalletView({ expenses, balances, settings, realTimeRate,
                 </div>
               </div>
             ))
+          )}
+          
+          {/* Inline Add Expense Row */}
+          {addExpense && (
+            <div className="glass-card p-4 rounded-3xl mt-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-sm">{settings.currencySymbol}</span>
+                    <input
+                      type="number"
+                      value={newAmount}
+                      onChange={(e) => setNewAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-white/60 border border-white/60 rounded-xl py-3 pl-8 pr-3 text-stone-800 font-bold font-num placeholder:text-stone-400 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all text-right"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="What did you spend on?"
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddExpense()}
+                    className="flex-[2] bg-white/60 border border-white/60 rounded-xl py-3 px-4 text-stone-800 font-medium placeholder:text-stone-400 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={handleAddExpense}
+                  disabled={!newTitle.trim() || !newAmount || Number(newAmount) <= 0}
+                  className="w-12 h-12 rounded-xl bg-stone-800 text-amber-50 flex items-center justify-center hover:bg-stone-700 disabled:bg-stone-300 disabled:cursor-not-allowed transition-all shadow-lg"
+                >
+                  <i className="ph ph-plus text-xl"></i>
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

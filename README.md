@@ -1,20 +1,22 @@
 # TravelFlow Pro 🌍✈️
 
-**TravelFlow Pro** is a modern, AI-powered travel planning application designed to streamline your trips. Built with React, TypeScript, and Firebase, it combines interactive 3D visualizations, real-time expense tracking, and AI-generated itineraries into a seamless PWA experience.
+**TravelFlow Pro** is a modern, AI-powered travel planning application designed to streamline your trips. Built with React, TypeScript, Node.js, and Firebase, it features interactive 3D visualizations, AI-generated itineraries using Google Gemini, and seamless cloud-based trip management.
 
 - **🌐 Global Access**: Works anywhere without VPN requirement
-- **🤖 AI-Powered**: Free AI integration with Hugging Face (no costly API keys)
+- **🤖 AI-Powered**: Google Gemini API integration for intelligent trip planning
 - **📱 Cross-Platform**: PWA-enabled, works on mobile and desktop
+- **🐳 Docker Support**: Containerized backend for easy deployment
 
 ![React](https://img.shields.io/badge/React-18-blue?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-5.0-purple?style=flat-square&logo=vite)
 ![Firebase](https://img.shields.io/badge/Firebase-10-orange?style=flat-square&logo=firebase)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-cyan?style=flat-square&logo=tailwindcss)
+![Node.js](https://img.shields.io/badge/Node.js-20-green?style=flat-square&logo=node.js)
+![Docker](https://img.shields.io/badge/Docker-Enabled-blue?style=flat-square&logo=docker)
 
 ## ✨ Key Features
 
-- **🤖 AI Trip Planner**: Generate complete, day-by-day itineraries instantly using free Hugging Face AI (or integrate Claude/Gemini)
+- **🤖 AI Trip Planner**: Generate complete, detailed day-by-day itineraries using Google Gemini AI with famous attractions, restaurants, and local experiences
 - **🌍 Interactive 3D Globe**: Visualize your destinations on a stunning, interactive 3D globe with real-time location display
 - **💰 Expense Tracker**: Seamless shared wallet to track expenses, split bills, and calculate balances between travelers
 - **📍 Smart Mapping**: View your daily routes and locations on interactive Leaflet maps with automatic coordinate resolution
@@ -22,32 +24,38 @@
 - **🗣️ Live Translator**: Built-in translation tools to help you communicate anywhere
 - **📱 PWA Support**: Installable on mobile devices with offline capabilities
 - **🎯 Location Recognition**: Supports complex location names including Japanese (心斎橋, 浅草寺), Chinese, and other international place names
+- **🔄 Itinerary Refinement**: Refine AI-generated plans based on your feedback in natural language
 
 ## 🛠️ Tech Stack
 
-- **Frontend Framework**: React 18 + Vite
+### Frontend
+- **Framework**: React 18 + Vite
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
-- **Backend & Auth**: Firebase (Auth, Firestore)
-- **Maps & Visuals**: Three.js (3D Globe), Leaflet (Interactive Maps), Open-Meteo + Nominatim (Geocoding)
-- **AI Integration**: Hugging Face Inference API (free tier, works globally)
+- **Maps & Visuals**: Three.js (3D Globe), Leaflet (Interactive Maps)
 - **State Management**: React Hooks (Custom Hooks)
 
-## 🚀 Quick Start
+### Backend
+- **Runtime**: Node.js 20
+- **Framework**: Express.js
+- **Language**: TypeScript
+- **AI**: Google Gemini API
+- **Geocoding**: Open-Meteo + Nominatim
 
-More detailed docs are in `docs/`:
-- `docs/START_HERE.md`
-- `docs/QUICK_START.md`
-- `docs/SETUP_GUIDE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/AUTH_AND_AI_SETUP.md`
+### Infrastructure
+- **Authentication**: Firebase Auth (Google, Anonymous)
+- **Database**: Firebase Cloud Firestore
+- **Deployment**: Docker + Docker Compose
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Node.js (v16 or higher)
 - npm or yarn
-- A Firebase account (free tier eligible)
-- A Hugging Face account (free, for AI features)
+- Docker & Docker Compose (optional, for containerized deployment)
+- Firebase account (free tier eligible)
+- Google Gemini API key (free tier available)
 
 ### Installation
 
@@ -58,7 +66,16 @@ More detailed docs are in `docs/`:
    ```
 
 2. **Install dependencies**
+
+   Frontend:
    ```bash
+   cd frontend
+   npm install
+   ```
+
+   Backend:
+   ```bash
+   cd backend
    npm install
    ```
 
@@ -69,72 +86,104 @@ More detailed docs are in `docs/`:
    - Enable Firestore Database
    - Get your Firebase config credentials
 
-4. **Set up Hugging Face AI (Optional but Recommended)**
-   - Sign up at [Hugging Face](https://huggingface.co)
-   - Create an API token at [Hugging Face Settings](https://huggingface.co/settings/tokens)
-   - This is free and works globally without VPN
+4. **Set up Google Gemini AI**
+   - Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+   - Create a new API key (free tier available)
+   - Copy your API key
 
 5. **Configure Environment Variables**
-   - Copy `.env.example` to `.env.local`:
-     ```bash
-     cp .env.example .env.local
-     ```
-   - Fill in your credentials:
-     ```env
-     # Firebase (Required)
-     VITE_FIREBASE_API_KEY=your_firebase_api_key
-     VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
-     VITE_FIREBASE_PROJECT_ID=your_project_id
-     VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
-     VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-     VITE_FIREBASE_APP_ID=your_app_id
 
-     # Hugging Face AI (Optional, for AI features)
-     VITE_HF_API_KEY=your_huggingface_api_token
-     ```
+   Frontend `.env.local`:
+   ```env
+   # Firebase (Required)
+   VITE_FIREBASE_API_KEY=your_firebase_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   ```
 
-6. **Run the development server**
+   Backend `.env`:
+   ```env
+   NODE_ENV=development
+   PORT=5000
+   FRONTEND_URL=http://localhost:5173
+   FIREBASE_PROJECT_ID=your_project_id
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+
+6. **Run the application**
+
+   Development mode:
    ```bash
+   # Terminal 1 - Backend
+   cd backend
+   npm run dev
+
+   # Terminal 2 - Frontend
+   cd frontend
    npm run dev
    ```
+
+   Or using Docker:
+   ```bash
+   docker-compose up --build
+   ```
+
    Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## 📜 Available Scripts
 
+### Frontend
 | Script | Description |
 | --- | --- |
 | `npm run dev` | Starts the development server with HMR |
-| `npm run build` | Builds the app for production (TypeScript compile + Vite build) |
-| `npm run lint` | Runs ESLint to check for code quality issues |
+| `npm run build` | Builds the app for production |
+| `npm run lint` | Runs ESLint to check for code quality |
 | `npm run preview` | Locally preview the production build |
+
+### Backend
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Starts the development server with hot reload |
+| `npm run build` | Compiles TypeScript to JavaScript |
+| `npm start` | Runs the production build |
+| `npm run lint` | Runs ESLint to check for code quality |
 
 ## 📂 Project Structure
 
 ```text
-src/
-├── components/
-│   ├── Globe.tsx           # 3D Globe visualization (Three.js)
-│   ├── Header.tsx          # App header with mini-globe
-│   ├── NavBar.tsx          # Bottom navigation tabs
-│   ├── FAB.tsx             # Floating action button
-│   ├── MapPanel.tsx        # Main map view
-│   ├── LoginView.tsx       # Authentication UI
-│   ├── Wizard.tsx          # Trip creation wizard with AI
-│   ├── ItineraryView.tsx   # Trip itinerary management
-│   └── WalletView.tsx      # Expense tracking view
-├── hooks/
-│   ├── useAuth.ts          # Firebase authentication
-│   ├── useTrip.ts          # Trip data management
-│   └── useDebounce.ts      # Debounce utility
-├── lib/
-│   ├── api.ts              # AI, geocoding, weather, translation APIs
-│   ├── firebase.ts         # Firebase configuration
-│   └── utils.ts            # Helper functions
-├── types/
-│   └── index.ts            # TypeScript interfaces
-├── App.tsx                 # Main application component
-├── main.tsx                # Application entry point
-└── index.css               # Global styles & Tailwind imports
+├── frontend/                # React frontend
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   │   ├── Globe.tsx          # 3D Globe visualization
+│   │   │   ├── Header.tsx         # App header
+│   │   │   ├── NavBar.tsx         # Navigation
+│   │   │   ├── Wizard.tsx         # Trip creation with AI
+│   │   │   ├── ItineraryView.tsx  # Trip management
+│   │   │   └── WalletView.tsx     # Expense tracking
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── lib/            # API clients & utilities
+│   │   └── types/          # TypeScript types
+│   └── package.json
+│
+├── backend/                 # Node.js backend
+│   ├── src/
+│   │   ├── routes/
+│   │   │   └── ai.ts               # AI endpoints
+│   │   ├── services/
+│   │   │   ├── AITripPlannerService.ts   # Gemini integration
+│   │   │   └── LocationService.ts        # Geocoding & weather
+│   │   ├── config/                 # Configuration
+│   │   ├── app.ts                  # Express app
+│   │   └── index.ts                # Entry point
+│   ├── Dockerfile
+│   └── package.json
+│
+├── docker-compose.yml       # Docker orchestration
+├── Makefile                 # Build commands
+└── README.md
 ```
 
 ## 🔐 Authentication
@@ -152,36 +201,38 @@ src/
 
 ## 🤖 AI Integration
 
-### How AI Works in TravelFlow
+### Google Gemini API
 
-**1. Trip Planning (Wizard)**
-- Uses Hugging Face Inference API to generate 3-day itineraries
-- Falls back to a template itinerary if API is unavailable
-- Automatically fetches coordinates for each location
+**TravelFlow Pro** uses Google Gemini API for intelligent trip planning:
 
-**2. Location Recommendations (AI Travel Guide)**
-- Provides hidden gem restaurant and activity suggestions
-- Works with any location name, including complex international names
-- Graceful fallback if API is rate-limited or unavailable
+**Features:**
+- **Generate Detailed Itineraries**: Creates day-by-day plans with famous attractions, restaurants, and local experiences
+- **Smart Recommendations**: Suggests specific, well-known locations with descriptions, costs, and timing
+- **Refine on Feedback**: Modify plans based on natural language requests (e.g., "More vegetarian options", "Less crowded places")
+- **Location Search**: Find places and get detailed information including coordinates and weather
 
-### Why Hugging Face?
-- ✅ **Free tier available** (perfect for testing/personal projects)
-- ✅ **Works globally** without VPN
-- ✅ **No credit card required** for API token
-- ✅ **Open source** model support
-- 📈 **Scale when needed** with paid plans
+**API Endpoints:**
+- `POST /api/ai/generate-itinerary` - Generate complete trip plan
+- `POST /api/ai/refine-itinerary` - Refine existing plan with feedback
+- `GET /api/ai/recommendations` - Get categorized recommendations (restaurants, attractions, events)
+- `GET /api/ai/search-location` - Search for locations
+- `GET /api/ai/location-info` - Get location details with weather
 
-### Alternative AI Providers
-You can easily swap to other AI services:
+**Why Google Gemini?**
+- ✅ **Free tier available** (perfect for personal projects)
+- ✅ **Fast & reliable** responses
+- ✅ **High quality** outputs with detailed information
+- ✅ **Simple API** integration
+- 📈 **Scale when needed** with flexible pricing
 
-**Google Gemini API** (Free tier + credits)
-- Update API calls in `src/lib/api.ts`
-- Set `VITE_GEMINI_API_KEY` in `.env.local`
+### Setup Instructions
 
-**Anthropic Claude** (Requires paid API key)
-- More advanced responses
-- Higher rate limits
-- Update `generateAIItinerary()` and `askAI()` functions
+1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Click "Create API Key"
+3. Copy your key and add to backend `.env`:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
 
 ## 🌍 Location Support
 
@@ -215,31 +266,53 @@ You can easily swap to other AI services:
 
 ## 🚀 Deployment
 
-### Deploy to Vercel (Recommended)
+### Deploy with Docker (Recommended)
+
+**Build and run with Docker Compose:**
 ```bash
-# One-click deployment from GitHub
+# Build and start services
+docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d
+
+# Stop services
+docker-compose down
+```
+
+**Manual Docker build:**
+```bash
+# Backend only
+cd backend
+docker build -t travelflow-backend .
+docker run -p 5000:5000 --env-file .env travelflow-backend
+```
+
+### Deploy Frontend to Vercel
+```bash
 # 1. Push code to GitHub
-# 2. Connect GitHub repo to Vercel
-# 3. Add environment variables in Vercel settings
+# 2. Import project in Vercel
+# 3. Set environment variables
 # 4. Deploy automatically
 ```
 
-### Deploy to Firebase Hosting
+### Deploy Frontend to Firebase Hosting
 ```bash
+cd frontend
 npm run build
 firebase deploy
 ```
 
-### Deploy to GitHub Pages
+### Deploy Backend to Railway/Render
 ```bash
-# Update vite.config.ts with base path
-npm run build
-# Push dist folder to gh-pages branch
+# 1. Connect GitHub repository
+# 2. Set environment variables
+# 3. Deploy from main branch
 ```
 
 ## 🔧 Configuration Guide
 
-### Firebase Setup (Step by Step)
+### Firebase Setup
 
 1. **Create Firebase Project**
    - Go to https://console.firebase.google.com
@@ -259,24 +332,20 @@ npm run build
    - Choose a location near your users
 
 4. **Get Your Credentials**
-   - Project Settings → Service Accounts
+   - Project Settings → General
+   - Scroll to "Your apps" → Web app
    - Copy your Firebase config values
-   - Paste into `.env.local`
+   - Paste into frontend `.env.local`
 
-### Hugging Face Setup (Step by Step)
+### Google Gemini Setup
 
-1. **Sign Up**
-   - Go to https://huggingface.co/join
-   - Create account (free)
+1. **Get API Key**
+   - Go to https://aistudio.google.com/app/apikey
+   - Click "Create API Key"
+   - Copy the generated key
 
-2. **Create API Token**
-   - Go to https://huggingface.co/settings/tokens
-   - Click "New token"
-   - Set token type to "Read"
-   - Copy the token
-
-3. **Add to Environment**
-   - Paste token into `VITE_HF_API_KEY` in `.env.local`
+2. **Add to Backend Environment**
+   - Paste key into `GEMINI_API_KEY` in backend `.env`
 
 ## 📊 Data Structure
 
@@ -318,11 +387,23 @@ npm run build
 
 ## 🐛 Troubleshooting
 
-### "AI is currently unavailable"
-- ✅ Check your Hugging Face API key in `.env.local`
-- ✅ Verify you haven't hit rate limits (free tier has limits)
-- ✅ Try using the fallback itinerary template
-- ✅ Upgrade to Hugging Face Pro for higher limits
+### Backend not starting
+- ✅ Check Node.js version (v16+ required)
+- ✅ Verify `.env` file exists in backend folder
+- ✅ Check `GEMINI_API_KEY` is set
+- ✅ Run `npm install` to ensure dependencies are installed
+
+### AI features not working
+- ✅ Verify `GEMINI_API_KEY` in backend `.env`
+- ✅ Check API key is valid at Google AI Studio
+- ✅ Verify backend is running on port 5000
+- ✅ Check browser console for CORS errors
+
+### Frontend can't connect to backend
+- ✅ Ensure backend is running on `http://localhost:5000`
+- ✅ Check `VITE_API_URL` in frontend `.env.local` (if set)
+- ✅ Verify CORS is configured correctly in backend
+- ✅ Check firewall settings
 
 ### "Location not found" on globe view
 - ✅ Check spelling of location name
@@ -331,16 +412,16 @@ npm run build
 - ✅ Try a nearby major city if specific location can't be resolved
 
 ### Firebase not connecting
-- ✅ Verify Firebase credentials in `.env.local`
+- ✅ Verify Firebase credentials in frontend `.env.local`
 - ✅ Check Firestore rules allow read/write in dev
 - ✅ Ensure browser allows cookies/localStorage
 - ✅ Try anonymous login if Google login fails
 
-### Map tiles not loading
-- ✅ Check internet connection
-- ✅ Verify browser allows external images
-- ✅ Try disabling ad blocker if using one
-- ✅ Clear browser cache and reload
+### Docker issues
+- ✅ Ensure Docker Desktop is running
+- ✅ Run `docker-compose down` then `docker-compose up --build`
+- ✅ Check logs with `docker-compose logs backend`
+- ✅ Verify `.env` file exists in project root
 
 ## 📄 License
 

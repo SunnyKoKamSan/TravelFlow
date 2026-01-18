@@ -7,13 +7,18 @@ import { getCoordinates, fetchWeather } from '@/lib/api';
 const defaultSettings: TripSettings = {
   isSetup: false,
   destination: '',
+  departureCity: '',
+  departureCurrencyCode: 'USD',
+  departureCurrencySymbol: '$',
   startDate: '',
+  endDate: '',
   days: 3,
   users: ['Me', 'Partner'],
   currencyCode: 'USD',
   currencySymbol: '$',
   targetLang: 'en',
   langName: 'English',
+  autoUpdateRate: true,
 };
 
 export function useTrip(userId: string | null) {

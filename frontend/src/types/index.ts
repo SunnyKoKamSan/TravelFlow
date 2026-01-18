@@ -2,12 +2,22 @@ export interface TripSettings {
   isSetup: boolean;
   destination: string;
   startDate: string;
+  endDate: string;
   days: number;
   users: string[];
   currencyCode: string;
   currencySymbol: string;
   targetLang: string;
   langName: string;
+  autoUpdateRate?: boolean;
+  // Departure location
+  departureCity?: string;
+  departureCountry?: string;
+  departureCurrencyCode?: string;
+  departureCurrencySymbol?: string;
+  departureCountryCode?: string;
+  departureLangCode?: string;
+  departureLangName?: string;
 }
 
 export interface ItineraryItem {
@@ -19,6 +29,11 @@ export interface ItineraryItem {
   lat?: number;
   lon?: number;
   weather?: WeatherData;
+  type?: 'activity' | 'transport';
+  transportMode?: 'flight' | 'train' | 'taxi';
+  transportNumber?: string;
+  origin?: string;
+  endTime?: string;
 }
 
 export interface WeatherData {

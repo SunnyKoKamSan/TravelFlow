@@ -1,5 +1,5 @@
-import app from '@/app.js';
-import config from '@/config/index.js';
+import app from './app.js';
+import config from './config/index.js';
 
 const startServer = async (): Promise<void> => {
   try {
@@ -7,7 +7,6 @@ const startServer = async (): Promise<void> => {
       console.log(`✅ Server running on port ${config.PORT}`);
       console.log(`📍 Environment: ${config.NODE_ENV}`);
       console.log(`🔗 Frontend URL: ${config.FRONTEND_URL}`);
-      console.log(`🗄️  Database: ${config.MONGODB_URI}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

@@ -3,9 +3,10 @@ import { useAuth } from './hooks/useAuth';
 import { useTrip } from './hooks/useTrip';
 import Header from './components/Header';
 import NavBar from './components/NavBar';
+import Sidebar from './components/Sidebar';
 import FAB from './components/FAB';
 import MapPanel from './components/MapPanel';
-import { getCoordinates, fetchWeather, fetchExchangeRate, translateText, askAI } from './lib/api';
+import { getCoordinates, fetchWeather, fetchExchangeRate, translateText, askAI, getAirlineFromCode } from './lib/api';
 import { formatDate } from './lib/utils';
 import { ItineraryItem, TripSettings } from './types';
 import L from 'leaflet';
@@ -18,12 +19,14 @@ const defaultSettings: TripSettings = {
   isSetup: false,
   destination: '',
   startDate: '',
+  endDate: '',
   days: 3,
   users: ['Me', 'Partner'],
   currencyCode: 'USD',
   currencySymbol: '$',
   targetLang: 'en',
   langName: 'English',
+  autoUpdateRate: true,
 };
 
 function App() {
@@ -68,9 +71,20 @@ function App() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showGlobeModal, setShowGlobeModal] = useState(false);
+  const [showTransportModal, setShowTransportModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
-  const [formItinerary, setFormItinerary] = useState({ id: null as number | null, time: '', location: '', note: '' });
+  const [formItinerary, setFormItinerary] = useState({ 
+    id: null as number | null, 
+    time: '', 
+    location: '', 
+    note: '',
+    type: 'activity' as 'activity' | 'transport',
+    transportMode: '' as '' | 'flight' | 'train' | 'taxi',
+    transportNumber: '',
+    origin: '',
+    endTime: '',
+  });
   const [formExpense, setFormExpense] = useState({ amount: '', title: '', payer: 'Me' });
   const [tempUsersString, setTempUsersString] = useState('');
   
@@ -81,12 +95,17 @@ function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
   
+  // Airline info for transport (display only - no real-time API)
+  const airlineInfo = formItinerary.transportNumber ? getAirlineFromCode(formItinerary.transportNumber) : null;
+  
   const [activeItemForGlobe, setActiveItemForGlobe] = useState<ItineraryItem | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const modalMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const modalMarkerRef = useRef<L.Marker | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
   const tabs = [
     { id: 'itinerary' as const, label: 'Plan', icon: 'ph-calendar-blank', iconFill: 'ph-calendar-check-fill' },
@@ -200,14 +219,64 @@ function App() {
   };
 
   const locateUser = () => {
-    navigator.geolocation.getCurrentPosition(pos => {
+    // If already tracking, stop tracking
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      setIsTrackingLocation(false);
+      return;
+    }
+
+    // Start real-time tracking
+    setIsTrackingLocation(true);
+    
+    const updateUserPosition = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
-      if (userMarkerRef.current && mapRef.current) mapRef.current.removeLayer(userMarkerRef.current);
-      const icon = L.divIcon({ className: 'bg-blue-500 border-4 border-white rounded-full shadow-xl w-4 h-4' });
+      if (userMarkerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(userMarkerRef.current);
+      }
+      const icon = L.divIcon({ 
+        className: 'bg-transparent',
+        html: `<div class="w-5 h-5 bg-blue-500 border-4 border-white rounded-full shadow-xl animate-pulse"></div>`
+      });
       userMarkerRef.current = L.marker([latitude, longitude], { icon }).addTo(mapRef.current!);
       mapRef.current!.setView([latitude, longitude], 15);
-    });
+    };
+
+    const handleError = (err: GeolocationPositionError) => {
+      console.warn('Geolocation error:', err.message);
+      setIsTrackingLocation(false);
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+
+    // Use watchPosition for real-time tracking
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      updateUserPosition,
+      handleError,
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
   };
+
+  // Cleanup watch on unmount or tab change
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  // Stop tracking when leaving map tab
+  useEffect(() => {
+    if (activeTab !== 'map' && watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      setIsTrackingLocation(false);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'map') {
@@ -252,7 +321,17 @@ function App() {
   const openAddModal = () => {
     if (activeTab === 'itinerary') {
       setIsEditing(false);
-      setFormItinerary({ id: null, time: '09:00', location: '', note: '' });
+      setFormItinerary({ 
+        id: null, 
+        time: '09:00', 
+        location: '', 
+        note: '',
+        type: 'activity',
+        transportMode: '',
+        transportNumber: '',
+        origin: '',
+        endTime: '',
+      });
       setShowItineraryModal(true);
     } else {
       setFormExpense({ amount: '', title: '', payer: settings.users[0] });
@@ -261,14 +340,55 @@ function App() {
   };
 
   const editItem = (item: ItineraryItem) => {
+    // If it's a transport item, use dedicated transport modal handled by addTransport
+    if (item.type === 'transport') {
+      setIsEditing(true);
+      setFormItinerary({
+        id: item.id,
+        time: item.time,
+        location: item.location,
+        note: item.note || '',
+        type: 'transport',
+        transportMode: item.transportMode || 'flight',
+        transportNumber: item.transportNumber || '',
+        origin: item.origin || '',
+        endTime: item.endTime || '',
+      });
+      setShowTransportModal(true);
+      return;
+    }
+    
+    // For activity items, use the standard itinerary modal
     setIsEditing(true);
     setFormItinerary({
       id: item.id,
       time: item.time,
       location: item.location,
       note: item.note || '',
+      type: 'activity',
+      transportMode: '',
+      transportNumber: '',
+      origin: '',
+      endTime: '',
     });
     setShowItineraryModal(true);
+  };
+
+  // Add transport - opens dedicated transport modal
+  const addTransport = () => {
+    setIsEditing(false);
+    setFormItinerary({
+      id: null,
+      time: currentDayIndex === 0 ? '08:00' : '15:00',
+      location: currentDayIndex === 0 ? settings.destination : settings.departureCity || 'Home',
+      note: '',
+      type: 'transport',
+      transportMode: 'flight',
+      transportNumber: '',
+      origin: currentDayIndex === 0 ? (settings.departureCity || 'Home') : settings.destination,
+      endTime: currentDayIndex === 0 ? '12:00' : '19:00',
+    });
+    setShowTransportModal(true);
   };
 
   const saveItinerary = async () => {
@@ -277,12 +397,19 @@ function App() {
     const coords = await getCoordinates(formItinerary.location);
     const weather = await fetchWeather(coords.lat, coords.lon);
     const newItem: ItineraryItem = {
-      ...formItinerary,
       id: formItinerary.id || Date.now(),
       dayIndex: currentDayIndex,
+      time: formItinerary.time,
+      location: formItinerary.location,
+      note: formItinerary.note,
       lat: coords.lat,
       lon: coords.lon,
       weather: weather || undefined,
+      type: formItinerary.type,
+      transportMode: formItinerary.transportMode || undefined,
+      transportNumber: formItinerary.transportNumber || undefined,
+      origin: formItinerary.origin || undefined,
+      endTime: formItinerary.endTime || undefined,
     };
 
     if (isEditing && formItinerary.id !== null) {
@@ -368,6 +495,36 @@ function App() {
 
   const addDay = () => {
     updateSettings({ days: settings.days + 1 });
+  };
+
+  const deleteDay = (dayIndex: number) => {
+    if (settings.days <= 1) return; // Don't delete the last day
+    
+    // Remove all itinerary items for this day and shift remaining days
+    const updatedItinerary = itinerary
+      .filter(item => item.dayIndex !== dayIndex)
+      .map(item => ({
+        ...item,
+        dayIndex: item.dayIndex > dayIndex ? item.dayIndex - 1 : item.dayIndex
+      }));
+    
+    // Update settings and itinerary
+    updateSettings({ days: settings.days - 1 });
+    // Update itinerary via the trip hook
+    updatedItinerary.forEach((item, idx) => {
+      if (itinerary[idx]?.dayIndex !== item.dayIndex) {
+        updateItineraryItem(item);
+      }
+    });
+    // Remove items that were on the deleted day
+    itinerary
+      .filter(item => item.dayIndex === dayIndex)
+      .forEach(item => deleteItineraryItem(item.id));
+    
+    // Adjust current day index if needed
+    if (currentDayIndex >= settings.days - 1) {
+      setCurrentDayIndex(Math.max(0, settings.days - 2));
+    }
   };
 
   const createNewTrip = () => {
@@ -464,56 +621,71 @@ function App() {
 
         {/* Dashboard */}
         {viewState === 'app' && (
-          <div className="h-full flex flex-col">
-            <Header
-              user={user}
-              syncStatus={syncStatus}
-              settings={settings}
-              itinerary={itinerary}
+          <div className="h-full flex">
+            {/* Left Sidebar - Desktop only */}
+            <Sidebar
+              tabs={tabs}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              destination={settings.destination}
               onShowHistory={() => setShowHistoryModal(true)}
-              onShowTranslator={() => setShowTranslator(true)}
-              onShowSettings={() => setShowSettings(true)}
-onBack={() => {
-                // Go back to wizard/planning destination page
-                setViewState('wizard');
-              }}
             />
 
-            <main className="flex-1 overflow-y-auto hide-scrollbar pb-safe-nav px-6 relative z-10 custom-scroll">
-              {/* Itinerary */}
-              {activeTab === 'itinerary' && (
-                <ItineraryView
-                  currentDayIndex={currentDayIndex}
-                  setCurrentDayIndex={setCurrentDayIndex}
-                  settingsDays={settings.days}
-                  filteredItinerary={filteredItinerary}
-                  addDay={addDay}
-                  editItem={editItem}
-                  openGlobeModal={openGlobeModal}
-                  handleAskAI={handleAskAI}
-                  handleDeleteItineraryItem={handleDeleteItineraryItem}
-                />
-              )}
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <Header
+                user={user}
+                syncStatus={syncStatus}
+                settings={settings}
+                itinerary={itinerary}
+                onShowTranslator={() => setShowTranslator(true)}
+                onShowSettings={() => setShowSettings(true)}
+                onShowHistory={() => setShowHistoryModal(true)}
+              />
 
-              {activeTab === 'wallet' && (
-                <WalletView
-                  expenses={expenses}
-                  balances={balances}
-                  settings={settings}
-                  realTimeRate={realTimeRate}
-                  handleDeleteExpense={handleDeleteExpense}
-                />
-              )}
+              <main className="flex-1 overflow-y-auto hide-scrollbar pb-safe-nav md:pb-6 px-6 relative z-10 custom-scroll">
+                {/* Itinerary */}
+                {activeTab === 'itinerary' && (
+                  <ItineraryView
+                    currentDayIndex={currentDayIndex}
+                    setCurrentDayIndex={setCurrentDayIndex}
+                    settingsDays={settings.days}
+                    filteredItinerary={filteredItinerary}
+                    addDay={addDay}
+                    deleteDay={deleteDay}
+                    editItem={editItem}
+                    openGlobeModal={openGlobeModal}
+                    handleAskAI={handleAskAI}
+                    handleDeleteItineraryItem={handleDeleteItineraryItem}
+                    addTransport={addTransport}
+                    settings={settings}
+                  />
+                )}
 
-              {/* Map */}
-              {activeTab === 'map' && (
-                <MapPanel mapReady={mapReady} currentDayIndex={currentDayIndex} locateUser={locateUser} />
-              )}
-            </main>
+                {activeTab === 'wallet' && (
+                  <WalletView
+                    expenses={expenses}
+                    balances={balances}
+                    settings={settings}
+                    realTimeRate={realTimeRate}
+                    handleDeleteExpense={handleDeleteExpense}
+                    addExpense={addExpense}
+                  />
+                )}
 
-            <FAB openAddModal={openAddModal} activeTab={activeTab} />
+                {/* Map */}
+                {activeTab === 'map' && (
+                  <MapPanel mapReady={mapReady} currentDayIndex={currentDayIndex} locateUser={locateUser} isTrackingLocation={isTrackingLocation} />
+                )}
+              </main>
 
-            <NavBar tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+              <FAB openAddModal={openAddModal} activeTab={activeTab} />
+
+              {/* Bottom NavBar - Mobile only */}
+              <div className="md:hidden">
+                <NavBar tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -655,6 +827,28 @@ onBack={() => {
               </div>
 
               <div className="space-y-4 flex-1 overflow-y-auto">
+                {/* Translator Shortcut Buttons */}
+                <div className="flex gap-2 mb-2">
+                  <a
+                    href={`https://translate.google.com/?sl=${settings.departureLangCode || 'en'}&tl=${settings.targetLang || 'ja'}&op=translate`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 bg-stone-800 text-amber-50 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-stone-700 active:scale-95 transition-all shadow-md"
+                  >
+                    <i className="ph"></i>
+                    {settings.departureLangName || 'English'} → {settings.langName || 'Local'}
+                  </a>
+                  <a
+                    href={`https://translate.google.com/?sl=${settings.targetLang || 'ja'}&tl=${settings.departureLangCode || 'en'}&op=translate`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 bg-orange-100 text-orange-700 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-orange-200 active:scale-95 transition-all shadow-sm border border-orange-200"
+                  >
+                    <i className="ph"></i>
+                    {settings.langName || 'Local'} → {settings.departureLangName || 'English'}
+                  </a>
+                </div>
+
                 <textarea
                   value={transInput}
                   onChange={(e) => setTransInput(e.target.value)}
@@ -701,7 +895,16 @@ onBack={() => {
                   <i className="ph ph-x text-lg"></i>
                 </button>
               </div>
-              <div className="space-y-6">
+              <div className="space-y-5">
+                {/* Activity type only - Transport is handled in the dedicated Transport section */}
+                <div className="bg-stone-50 px-4 py-3 rounded-2xl border border-stone-100">
+                  <div className="flex items-center gap-2 text-stone-600">
+                    <i className="ph ph-map-pin text-lg"></i>
+                    <span className="font-bold text-sm">Activity</span>
+                  </div>
+                </div>
+
+                {/* Time */}
                 <div className="bg-stone-50 p-5 rounded-[24px] border border-stone-100">
                   <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Time</label>
                   <input
@@ -711,6 +914,8 @@ onBack={() => {
                     className="w-full bg-transparent text-3xl font-bold font-num text-stone-800 outline-none"
                   />
                 </div>
+
+                {/* Location */}
                 <div className="bg-stone-50 p-5 rounded-[24px] border border-stone-100">
                   <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Location</label>
                   <input
@@ -721,21 +926,157 @@ onBack={() => {
                     className="w-full bg-transparent text-xl font-bold text-stone-800 outline-none placeholder-stone-300"
                   />
                 </div>
+
+                {/* Notes */}
                 <div className="bg-stone-50 p-5 rounded-[24px] border border-stone-100">
                   <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Notes</label>
                   <textarea
                     value={formItinerary.note}
                     onChange={(e) => setFormItinerary(prev => ({ ...prev, note: e.target.value }))}
-                    rows={3}
+                    rows={2}
                     placeholder="Details..."
                     className="w-full bg-transparent text-lg font-medium text-stone-600 outline-none resize-none placeholder-stone-300"
                   ></textarea>
                 </div>
+
                 <button
                   onClick={saveItinerary}
                   className="w-full bg-stone-800 text-white font-bold py-5 rounded-[24px] shadow-xl hover:bg-stone-700 active:scale-[0.98] transition-all text-lg"
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Transport Modal - Dedicated modal for transport items */}
+        {showTransportModal && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-stone-900/30 backdrop-blur-xl">
+            <div className="bg-white/95 backdrop-blur-xl w-full sm:w-[450px] sm:rounded-[40px] rounded-t-[40px] p-8 shadow-2xl pb-safe-nav border-t border-white/50 overflow-y-auto custom-scroll max-h-[90vh]">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-3xl font-bold text-stone-800 flex items-center gap-2">
+                  <i className="ph ph-airplane-tilt text-orange-500"></i>
+                  {isEditing ? 'Edit' : 'Add'} Transport
+                </h3>
+                <button
+                  onClick={() => setShowTransportModal(false)}
+                  className="bg-stone-100 p-2 rounded-full text-stone-500 hover:text-stone-800 transition-colors"
+                >
+                  <i className="ph ph-x text-lg"></i>
+                </button>
+              </div>
+              <div className="space-y-5">
+                {/* Transport Mode Selection */}
+                <div className="flex gap-2">
+                  {[
+                    { mode: 'flight', icon: 'ph-airplane-tilt', label: 'Flight' },
+                    { mode: 'train', icon: 'ph-train', label: 'Train' },
+                    { mode: 'taxi', icon: 'ph-taxi', label: 'Taxi' },
+                  ].map(({ mode, icon, label }) => (
+                    <button
+                      key={mode}
+                      onClick={() => setFormItinerary(prev => ({ ...prev, transportMode: mode as 'flight' | 'train' | 'taxi' }))}
+                      className={`flex-1 py-3 rounded-xl text-sm font-bold flex flex-col items-center gap-1 transition-all ${
+                        formItinerary.transportMode === mode
+                          ? 'bg-orange-100 text-orange-600 border-2 border-orange-300'
+                          : 'bg-stone-50 text-stone-400 border border-stone-200'
+                      }`}
+                    >
+                      <i className={`ph ${icon} text-xl`}></i>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Flight/Train Number */}
+                <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                    {formItinerary.transportMode === 'flight' ? 'Flight Number' : formItinerary.transportMode === 'train' ? 'Train Number' : 'Vehicle Info'}
+                  </label>
+                  <input
+                    value={formItinerary.transportNumber}
+                    onChange={(e) => setFormItinerary(prev => ({ ...prev, transportNumber: e.target.value.toUpperCase() }))}
+                    type="text"
+                    placeholder={formItinerary.transportMode === 'flight' ? 'e.g. CX123, UO866' : 'e.g. G1234'}
+                    className="w-full bg-white/60 border border-white/80 rounded-xl px-4 py-3 text-lg font-bold text-stone-800 outline-none focus:ring-2 focus:ring-orange-300/50"
+                  />
+                  {/* Show airline name if recognized */}
+                  {airlineInfo && formItinerary.transportMode === 'flight' && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-orange-600">
+                      <i className="ph ph-airplane-tilt"></i>
+                      <span className="font-bold">{airlineInfo.name}</span>
+                      <span className="text-stone-400">({airlineInfo.hub})</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Origin */}
+                <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">From (Origin)</label>
+                  <input
+                    value={formItinerary.origin}
+                    onChange={(e) => setFormItinerary(prev => ({ ...prev, origin: e.target.value }))}
+                    type="text"
+                    placeholder="e.g. Hong Kong, HKG"
+                    className="w-full bg-transparent text-lg font-bold text-stone-800 outline-none placeholder-stone-300"
+                  />
+                </div>
+
+                {/* Destination */}
+                <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">To (Destination)</label>
+                  <input
+                    value={formItinerary.location}
+                    onChange={(e) => setFormItinerary(prev => ({ ...prev, location: e.target.value }))}
+                    type="text"
+                    placeholder="Arrival location"
+                    className="w-full bg-transparent text-lg font-bold text-stone-800 outline-none placeholder-stone-300"
+                  />
+                </div>
+
+                {/* Times */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                    <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Depart</label>
+                    <input
+                      value={formItinerary.time}
+                      onChange={(e) => setFormItinerary(prev => ({ ...prev, time: e.target.value }))}
+                      type="time"
+                      className="w-full bg-transparent text-2xl font-bold font-num text-stone-800 outline-none"
+                    />
+                  </div>
+                  <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                    <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Arrive</label>
+                    <input
+                      value={formItinerary.endTime}
+                      onChange={(e) => setFormItinerary(prev => ({ ...prev, endTime: e.target.value }))}
+                      type="time"
+                      className="w-full bg-transparent text-2xl font-bold font-num text-stone-800 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className="bg-stone-50 p-4 rounded-[24px] border border-stone-100">
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Notes</label>
+                  <textarea
+                    value={formItinerary.note}
+                    onChange={(e) => setFormItinerary(prev => ({ ...prev, note: e.target.value }))}
+                    rows={2}
+                    placeholder="Terminal, gate, booking reference..."
+                    className="w-full bg-transparent text-lg font-medium text-stone-600 outline-none resize-none placeholder-stone-300"
+                  ></textarea>
+                </div>
+
+                <button
+                  onClick={() => {
+                    saveItinerary();
+                    setShowTransportModal(false);
+                  }}
+                  className="w-full bg-orange-500 text-white font-bold py-5 rounded-[24px] shadow-xl hover:bg-orange-600 active:scale-[0.98] transition-all text-lg"
+                >
+                  Save Transport
                 </button>
               </div>
             </div>
