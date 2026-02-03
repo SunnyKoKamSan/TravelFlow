@@ -18,11 +18,11 @@ interface TripPlannerResponse {
 export class AITripPlannerService {
   private genAI: GoogleGenerativeAI | null = null;
 
-  constructor() {
-    if (config.GEMINI_API_KEY) {
-      this.genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
-    }
-  }
+  // constructor() {
+  //   if (config.GEMINI_API_KEY) {
+  //     this.genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
+  //   }
+  // }
 
   /**
    * Enhanced prompt for detailed trip planning
@@ -90,17 +90,22 @@ Return ONLY valid JSON, nothing else.`;
     }
 
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
-
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const prompt = this.buildEnhancedPrompt(destination, days, interests);
+
+      console.log('🤖 Calling Google Gemini AI for itinerary generation...');
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
 
+      console.log('✅ Received response from Gemini');
+      console.log('Response text (first 500 chars):', text.substring(0, 500));
+
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.error('❌ No JSON found in response. Full response:', text);
         throw new Error('No JSON found in response');
       }
 
@@ -136,11 +141,10 @@ Return ONLY valid JSON, nothing else.`;
     };
 
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const result = await model.generateContent(prompts[activityType]);
       const response = await result.response;
       const text = response.text();
-
       return text.split('\n').filter((line: string) => line.trim().length > 0);
     } catch (error) {
       console.error(`Error getting ${activityType} recommendations:`, error);
@@ -197,7 +201,7 @@ Ensure the refined plan:
 Return ONLY valid JSON, nothing else.`;
 
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const result = await model.generateContent(refinementPrompt);
       const response = await result.response;
       const text = response.text();

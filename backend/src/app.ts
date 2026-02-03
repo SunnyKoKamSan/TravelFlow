@@ -1,7 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import config from './config/index.js';
-import aiRoutes from './routes/ai.js';
 
 const app: Express = express();
 
@@ -24,9 +23,6 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-
-// Routes
-app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

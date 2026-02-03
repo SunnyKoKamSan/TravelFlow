@@ -6,12 +6,15 @@ interface HeaderProps {
   syncStatus: string;
   settings: any;
   itinerary: any[];
+  expenses?: any[];
+  balances?: Record<string, number>;
   onShowTranslator: () => void;
   onShowSettings: () => void;
   onShowHistory: () => void;
+  onExportPDF?: () => void;
 }
 
-export default function Header({ user, syncStatus, settings, itinerary, onShowTranslator, onShowSettings, onShowHistory }: HeaderProps) {
+export default function Header({ user, syncStatus, settings, itinerary, expenses, balances, onShowTranslator, onShowSettings, onShowHistory, onExportPDF }: HeaderProps) {
   // Get language names for translator shortcuts
   const departureLang = settings.departureLangName || 'English';
   const destLang = settings.langName || 'English';
@@ -67,6 +70,16 @@ export default function Header({ user, syncStatus, settings, itinerary, onShowTr
         </div>
       </div>
       <div className="flex items-center gap-3 mb-2">
+        {/* Export PDF Button */}
+        {onExportPDF && (
+          <button
+            onClick={onExportPDF}
+            className="hidden sm:flex w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 items-center justify-center text-white transition-all active:scale-95 shadow-lg hover:shadow-xl"
+            title="Export Trip to PDF"
+          >
+            <i className="ph-fill ph-file-pdf text-xl"></i>
+          </button>
+        )}
         {/* Trip Plan Management Button - Mobile only (sidebar has it on desktop) */}
         <button
           onClick={onShowHistory}

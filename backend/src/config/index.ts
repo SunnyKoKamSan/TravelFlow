@@ -9,9 +9,6 @@ export const config = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
 
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
-  
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
-  CLAUDE_API_KEY: process.env.CLAUDE_API_KEY || '',
 
   GEOCODING_TIMEOUT: 3000,
   WEATHER_TIMEOUT: 2000,

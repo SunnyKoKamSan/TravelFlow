@@ -4,7 +4,7 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const API_TIMEOUT = 30000; // 30 seconds for AI operations
+const API_TIMEOUT = 30000;
 
 class APIClient {
   private baseURL: string;
@@ -47,71 +47,6 @@ class APIClient {
   }
 
   /**
-   * Generate AI itinerary for a destination
-   */
-  async generateItinerary(
-    destination: string,
-    days: number = 3,
-    interests?: string[]
-  ): Promise<any> {
-    return this.request('/api/ai/generate-itinerary', {
-      method: 'POST',
-      body: JSON.stringify({ destination, days, interests }),
-    });
-  }
-
-  /**
-   * Refine existing itinerary based on user feedback
-   */
-  async refineItinerary(
-    currentItinerary: any[],
-    destination: string,
-    feedback: string,
-    days?: number
-  ): Promise<any> {
-    return this.request('/api/ai/refine-itinerary', {
-      method: 'POST',
-      body: JSON.stringify({
-        currentItinerary,
-        destination,
-        feedback,
-        days,
-      }),
-    });
-  }
-
-  /**
-   * Get recommendations for a location by type
-   */
-  async getRecommendations(
-    location: string,
-    type: 'restaurants' | 'attractions' | 'events' | 'general' = 'general'
-  ): Promise<any> {
-    const params = new URLSearchParams({
-      location,
-      type,
-    });
-
-    return this.request(`/api/ai/recommendations?${params.toString()}`);
-  }
-
-  /**
-   * Search for a location
-   */
-  async searchLocation(query: string): Promise<any> {
-    const params = new URLSearchParams({ query });
-    return this.request(`/api/ai/search-location?${params.toString()}`);
-  }
-
-  /**
-   * Get detailed location information (coordinates, weather, etc.)
-   */
-  async getLocationInfo(location: string): Promise<any> {
-    const params = new URLSearchParams({ location });
-    return this.request(`/api/ai/location-info?${params.toString()}`);
-  }
-
-  /**
    * Health check
    */
   async healthCheck(): Promise<{ status: string }> {
@@ -121,28 +56,34 @@ class APIClient {
 
 export const apiClient = new APIClient();
 
-// Legacy exports for backward compatibility
-export const generateAIItinerary = (destination: string) =>
-  apiClient.generateItinerary(destination);
-
-export const askAI = (location: string) =>
-  apiClient.getRecommendations(location, 'general');
-
+// Utility functions for external APIs
 export const getCoordinates = async (location: string) => {
   try {
-    const info = await apiClient.getLocationInfo(location);
-    return info.coordinates;
+    // Using OpenStreetMap Nominatim API for geocoding
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+    return { lat: 0, lon: 0 };
   } catch (error) {
     console.error('Failed to get coordinates:', error);
     return { lat: 0, lon: 0 };
   }
 };
 
-export const fetchWeather = async (_lat: number, _lon: number) => {
+export const fetchWeather = async (lat: number, lon: number) => {
   try {
-    // Would need a separate weather endpoint, or use the location info endpoint
-    console.warn('fetchWeather: implement weather endpoint or use location-info');
-    return undefined;
+    // Using Open-Meteo free weather API
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    const data = await res.json();
+    return data.current_weather;
   } catch (error) {
     console.error('Failed to fetch weather:', error);
     return undefined;
@@ -180,7 +121,14 @@ export const translateText = async (
   }
 };
 
-export const searchLocation = (query: string) =>
-  apiClient.searchLocation(query);
+export const getAirlineFromCode = (code: string) => {
+  const airlines: Record<string, string> = {
+    'CX': 'Cathay Pacific',
+    'KA': 'Cathay Dragon',
+    'HX': 'Hong Kong Airlines',
+    'UO': 'Hong Kong Express',
+  };
+  return airlines[code.toUpperCase().substring(0, 2)] || null;
+};
 
 export default apiClient;

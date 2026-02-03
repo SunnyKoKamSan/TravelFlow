@@ -6,12 +6,12 @@ import NavBar from './components/NavBar';
 import Sidebar from './components/Sidebar';
 import FAB from './components/FAB';
 import MapPanel from './components/MapPanel';
-import { getCoordinates, fetchWeather, fetchExchangeRate, translateText, askAI, getAirlineFromCode } from './lib/api';
+import { getCoordinates, fetchWeather, fetchExchangeRate, translateText, getAirlineFromCode } from './lib/api';
 import { formatDate } from './lib/utils';
+import { exportTripToPDF } from './lib/pdfExport';
 import { ItineraryItem, TripSettings } from './types';
 import L from 'leaflet';
 import LoginView from './components/LoginView';
-import Wizard from './components/Wizard';
 import ItineraryView from './components/ItineraryView';
 import WalletView from './components/WalletView';
 
@@ -58,7 +58,7 @@ function App() {
     updateSettings,
   } = useTrip(userId);
 
-  const [viewState, setViewState] = useState<'loading' | 'login' | 'wizard' | 'app'>('loading');
+  const [viewState, setViewState] = useState<'loading' | 'login' | 'app'>('loading');
   const [activeTab, setActiveTab] = useState<'itinerary' | 'wallet' | 'map'>('itinerary');
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [realTimeRate, setRealTimeRate] = useState(1);
@@ -69,9 +69,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showTranslator, setShowTranslator] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showAIModal, setShowAIModal] = useState(false);
   const [showGlobeModal, setShowGlobeModal] = useState(false);
   const [showTransportModal, setShowTransportModal] = useState(false);
+  const [showPDFConfirm, setShowPDFConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
   const [formItinerary, setFormItinerary] = useState({ 
@@ -91,9 +91,6 @@ function App() {
   const [transInput, setTransInput] = useState('');
   const [transResult, setTransResult] = useState('');
   const [transLoading, setTransLoading] = useState(false);
-  
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState('');
   
   // Airline info for transport (display only - no real-time API)
   const airlineInfo = formItinerary.transportNumber ? getAirlineFromCode(formItinerary.transportNumber) : null;
@@ -143,8 +140,6 @@ function App() {
 
     if (!user) {
       setViewState('login');
-    } else if (!settings.isSetup) {
-      setViewState('wizard');
     } else {
       setViewState('app');
     }
@@ -455,7 +450,6 @@ function App() {
       setExpenses([]);
       setSettings(defaultSettings);
       saveData();
-      setViewState('wizard');
     }
   };
 
@@ -472,19 +466,28 @@ function App() {
     }
   };
 
-  const handleAskAI = async (item: ItineraryItem) => {
-    setShowAIModal(true);
-    setAiLoading(true);
-    setAiResponse('Loading recommendations...');
+  const handleExportPDF = () => {
+    if (!settings.isSetup) {
+      alert('Please set up your trip first');
+      return;
+    }
+    
+    // Show confirmation modal instead of direct export
+    setShowPDFConfirm(true);
+  };
 
+  const confirmExportPDF = () => {
     try {
-      const response = await askAI(item.location);
-      setAiResponse(response);
-    } catch (e) {
-      console.error('AI Assistant Failed', e);
-      setAiResponse('AI recommendations are currently unavailable. Please try again later or check your Hugging Face API key configuration.');
-    } finally {
-      setAiLoading(false);
+      exportTripToPDF({
+        settings,
+        itinerary,
+        expenses,
+        balances
+      });
+      setShowPDFConfirm(false);
+    } catch (error) {
+      console.error('Failed to export PDF:', error);
+      alert('Failed to export PDF. Please try again.');
     }
   };
 
@@ -530,7 +533,6 @@ function App() {
   const createNewTrip = () => {
     tripCreateNewTrip();
     setShowHistoryModal(false);
-    setViewState('wizard');
   };
 
   const handleLoginAnonymously = async () => {
@@ -604,21 +606,6 @@ function App() {
           />
         )}
 
-        {/* Wizard */}
-        {viewState === 'wizard' && (
-          <Wizard
-            setSettings={setSettings}
-            setItinerary={setItinerary}
-            setExpenses={setExpenses}
-            saveData={saveData}
-            setCurrentTripId={setCurrentTripId}
-            setViewState={setViewState}
-            allTrips={allTrips}
-            switchTrip={switchTrip}
-            currentTripId={currentTripId}
-          />
-        )}
-
         {/* Dashboard */}
         {viewState === 'app' && (
           <div className="h-full flex">
@@ -638,9 +625,12 @@ function App() {
                 syncStatus={syncStatus}
                 settings={settings}
                 itinerary={itinerary}
+                expenses={expenses}
+                balances={balances}
                 onShowTranslator={() => setShowTranslator(true)}
                 onShowSettings={() => setShowSettings(true)}
                 onShowHistory={() => setShowHistoryModal(true)}
+                onExportPDF={handleExportPDF}
               />
 
               <main className="flex-1 overflow-y-auto hide-scrollbar pb-safe-nav md:pb-6 px-6 relative z-10 custom-scroll">
@@ -655,7 +645,6 @@ function App() {
                     deleteDay={deleteDay}
                     editItem={editItem}
                     openGlobeModal={openGlobeModal}
-                    handleAskAI={handleAskAI}
                     handleDeleteItineraryItem={handleDeleteItineraryItem}
                     addTransport={addTransport}
                     settings={settings}
@@ -1084,31 +1073,44 @@ function App() {
         )}
 
         {/* AI Modal */}
-        {showAIModal && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-stone-900/30 backdrop-blur-xl">
-            <div className="bg-white/95 backdrop-blur-xl w-full sm:w-[450px] sm:rounded-[40px] rounded-t-[40px] p-8 shadow-2xl pb-safe-nav border-t border-white/50 h-[70vh] flex flex-col overflow-y-auto custom-scroll">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
-                  <i className="ph ph-sparkle text-purple-500"></i> AI Travel Guide
-                </h3>
-                <button
-                  onClick={() => setShowAIModal(false)}
-                  className="bg-stone-100 p-2 rounded-full text-stone-500 hover:text-stone-800 transition-colors"
-                >
-                  <i className="ph ph-x text-lg"></i>
-                </button>
-              </div>
-              <div className="space-y-4 flex-1">
-                {aiLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full spin mb-4"></div>
-                    <p className="text-stone-500 font-bold animate-pulse">Consulting Gemini...</p>
-                  </div>
-                ) : (
-                  <div className="prose prose-stone">
-                    <p className="text-lg font-medium text-stone-700 whitespace-pre-wrap">{aiResponse}</p>
-                  </div>
-                )}
+
+        {/* PDF Export Confirmation Modal */}
+        {showPDFConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 backdrop-blur-sm">
+            <div className="bg-white/95 backdrop-blur-xl w-[90%] max-w-md rounded-[32px] p-8 shadow-2xl border border-white/50 animate-[slideUp_0.2s_ease-out]">
+              <div className="flex flex-col items-center text-center">
+                {/* Icon */}
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mb-6 shadow-lg">
+                  <i className="ph-fill ph-file-pdf text-white text-4xl"></i>
+                </div>
+                
+                {/* Title */}
+                <h3 className="text-2xl font-bold text-stone-800 mb-3">Export to PDF</h3>
+                
+                {/* Description */}
+                <p className="text-stone-600 font-medium mb-2">
+                  Your trip plan will be saved as a PDF document
+                </p>
+                <p className="text-sm text-stone-500 mb-8">
+                  Includes itinerary, expenses, and settlement details
+                </p>
+                
+                {/* Buttons */}
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => setShowPDFConfirm(false)}
+                    className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold py-4 rounded-2xl transition-colors active:scale-95"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmExportPDF}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <i className="ph-fill ph-download-simple text-xl"></i>
+                    Download PDF
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1217,14 +1219,26 @@ function App() {
                 </div>
                 <div className="pt-2 flex gap-3">
                   <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      handleExportPDF();
+                    }}
+                    className="flex-1 text-white text-sm bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 py-3 rounded-2xl transition-all font-bold flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <i className="ph-fill ph-file-pdf"></i>
+                    Export PDF
+                  </button>
+                  <button
                     onClick={resetData}
                     className="flex-1 text-rose-500 text-sm border border-rose-100 bg-rose-50 py-3 rounded-2xl hover:bg-rose-100 transition-colors font-bold"
                   >
                     Reset Trip
                   </button>
+                </div>
+                <div className="pt-0 flex gap-3">
                   <button
                     onClick={saveSettings}
-                    className="flex-[2] bg-stone-800 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-stone-700 transition-all"
+                    className="flex-1 bg-stone-800 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-stone-700 transition-all"
                   >
                     Save
                   </button>

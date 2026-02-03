@@ -10,7 +10,6 @@ interface Props {
   deleteDay: (dayIndex: number) => void;
   editItem: (item: ItineraryItem) => void;
   openGlobeModal: (item: ItineraryItem) => void;
-  handleAskAI: (item: ItineraryItem) => void;
   handleDeleteItineraryItem: (id: number) => void;
   addTransport: () => void;
   settings?: TripSettings;
@@ -58,7 +57,6 @@ export default function ItineraryView({
   deleteDay,
   editItem, 
   openGlobeModal, 
-  handleAskAI, 
   handleDeleteItineraryItem,
   addTransport,
   settings 
@@ -197,14 +195,8 @@ export default function ItineraryView({
                   </div>
                   <div className="flex gap-2 pt-3 mt-3 border-t border-stone-200/50 relative z-10">
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleAskAI(item); }}
-                      className="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all font-bold shadow-sm"
-                    >
-                      <i className="ph ph-sparkle"></i> AI Help
-                    </button>
-                    <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteItineraryItem(item.id); }}
-                      className="w-10 bg-white/50 hover:bg-rose-50 text-stone-400 hover:text-rose-500 py-2.5 rounded-xl flex items-center justify-center transition-all shadow-sm"
+                      className="w-full bg-white/50 hover:bg-rose-50 text-stone-400 hover:text-rose-500 py-2.5 rounded-xl flex items-center justify-center transition-all shadow-sm"
                     >
                       <i className="ph ph-trash"></i>
                     </button>
@@ -261,12 +253,6 @@ export default function ItineraryView({
                   </p>
                 )}
                 <div className="flex gap-2 pt-2 border-t border-stone-200/50 relative z-10">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleAskAI(item); }}
-                    className="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold shadow-sm"
-                  >
-                    <i className="ph ph-sparkle"></i> Ask AI
-                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); openGlobeModal(item); }}
                     className="flex-1 bg-white/50 hover:bg-white text-stone-600 hover:text-orange-700 text-sm py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold shadow-sm"
