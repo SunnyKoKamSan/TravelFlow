@@ -4,14 +4,34 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
+const requiredEnvVars: Record<string, string | undefined> = {
+  VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
+  VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const missingVars = Object.entries(requiredEnvVars)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingVars.length > 0) {
+  throw new Error(
+    `Missing required Firebase environment variables: ${missingVars.join(', ')}. ` +
+    'Copy frontend/.env.example to frontend/.env.local and fill in your Firebase project values.'
+  );
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA-lQH5jzN7Yl-EwnyYP0zpukpYHbifJJ0",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "travelflow-93388.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "travelflow-93388",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "travelflow-93388.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "935418035088",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:935418035088:web:c74b42f9cce65f42015115",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-PE771LVYLS"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
